@@ -1,0 +1,13 @@
+{
+  "name": "seo-optimizer",
+  "version": "1.0.0",
+  "description": "SEO Optimizer webpage that calls the /generate API and lets the editor tweak the response",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
