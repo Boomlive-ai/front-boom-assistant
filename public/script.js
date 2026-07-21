@@ -196,13 +196,46 @@ function escapeHtml(s) {
     .replace(/'/g, '&#39;');
 }
 
+// Turn any API error shape into a readable string.
+// Handles FastAPI's {detail: [{loc, msg, type}, ...]} validation errors
+// as well as plain {detail: "…"}, {error: "…"}, {message: "…"}, etc.
+function extractErrorMessage(data, status) {
+  if (!data) return `HTTP ${status}`;
+  const raw = data.detail ?? data.error ?? data.message;
+  if (raw == null) return `HTTP ${status}`;
+  if (typeof raw === 'string') return raw;
+  if (Array.isArray(raw)) {
+    return raw
+      .map((e) => {
+        if (typeof e === 'string') return e;
+        if (e && typeof e === 'object') {
+          const loc = Array.isArray(e.loc)
+            ? e.loc.filter((x) => x !== 'body').join('.')
+            : e.loc || '';
+          const msg = e.msg || e.message || JSON.stringify(e);
+          return loc ? `${loc}: ${msg}` : msg;
+        }
+        return String(e);
+      })
+      .join(' · ');
+  }
+  if (typeof raw === 'object') {
+    try {
+      return JSON.stringify(raw);
+    } catch {
+      return `HTTP ${status}`;
+    }
+  }
+  return String(raw);
+}
+
 // ---------- form submit ----------
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
   const fd = new FormData(form);
-  const payload = {
-    language: fd.get('language') || 'en',
+  const raw = {
+    language: fd.get('language') || '',
     claim: (fd.get('claim') || '').trim(),
     claim_source: (fd.get('claim_source') || '').trim(),
     verdict: fd.get('verdict') || '',
@@ -214,10 +247,11 @@ form.addEventListener('submit', async (e) => {
     article_url: (fd.get('article_url') || '').trim(),
   };
 
-  if (!payload.claim || !payload.facts_and_findings || !payload.verdict) {
-    showToast('Claim, verdict and facts & findings are required', true);
-    return;
-  }
+  // Drop blank fields so the backend treats them as "not provided"
+  // (empty strings fail typed validators like date / url on Pydantic).
+  const payload = Object.fromEntries(
+    Object.entries(raw).filter(([, v]) => v !== '' && v != null)
+  );
 
   setLoading(true);
   try {
@@ -234,7 +268,7 @@ form.addEventListener('submit', async (e) => {
       throw new Error('Server returned non-JSON: ' + text.slice(0, 200));
     }
     if (!res.ok) {
-      throw new Error(data.detail || data.error || `HTTP ${res.status}`);
+      throw new Error(extractErrorMessage(data, res.status));
     }
     renderResponse(data);
     showToast('Generated successfully');
