@@ -10,7 +10,7 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 const GENERATE_API =
   process.env.GENERATE_API ||
-  'https://boom-assistant.vps.boomlive.in';
+  'https://boom-assistant.vps.boomlive.in/generate';
 
 // The app answers on two addresses: the Coolify root URL, and a folder path on
 // another host (https://toolbox.boomlive.in/front-boom-assistant). A reverse
