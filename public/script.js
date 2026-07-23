@@ -255,7 +255,9 @@ form.addEventListener('submit', async (e) => {
 
   setLoading(true);
   try {
-    const res = await fetch('/api/generate', {
+    // Relative on purpose, so the app also works when it is served from a
+    // folder path such as /front-boom-assistant/ — see README "Two addresses".
+    const res = await fetch('api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', accept: 'application/json' },
       body: JSON.stringify(payload),

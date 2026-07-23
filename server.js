@@ -12,11 +12,22 @@ const GENERATE_API =
   process.env.GENERATE_API ||
   'https://amm2qzatdibi7ne73tfjs5z0.vps.boomlive.in/generate';
 
+// The app answers on two addresses: the Coolify root URL, and a folder path on
+// another host (https://toolbox.boomlive.in/front-boom-assistant). A reverse
+// proxy usually strips that folder before forwarding, but not always — so the
+// routes are mounted at both places and it works either way, with no config.
+// Set BASE_PATH="" to mount at the root only.
+const BASE_PATH = process.env.BASE_PATH ?? '/front-boom-assistant';
+
 app.use(express.json({ limit: '2mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+
+// All routes live on a router so the same handlers can be mounted twice.
+const router = express.Router();
+
+router.use(express.static(path.join(__dirname, 'public')));
 
 // Proxy endpoint — forwards the JSON body to the FastAPI /generate route.
-app.post('/api/generate', async (req, res) => {
+router.post('/api/generate', async (req, res) => {
   try {
     const upstream = await fetch(GENERATE_API, {
       method: 'POST',
@@ -44,9 +55,20 @@ app.post('/api/generate', async (req, res) => {
   }
 });
 
-app.get('/health', (_req, res) => res.json({ ok: true }));
+router.get('/health', (_req, res) => res.json({ ok: true }));
+
+// Specific path first, then the root. Express strips the mount path from
+// req.url before the router runs and restores it after, so both work; a router
+// that matches nothing calls next(), so ordering never traps a request.
+// The root mount also keeps /health reachable for the Docker HEALTHCHECK,
+// which calls 127.0.0.1 directly and never passes through the proxy.
+if (BASE_PATH) app.use(BASE_PATH, router);
+app.use('/', router);
 
 app.listen(PORT, () => {
   console.log(`SEO Optimizer running on http://localhost:${PORT}`);
+  if (BASE_PATH) {
+    console.log(`Also serving under http://localhost:${PORT}${BASE_PATH}/`);
+  }
   console.log(`Proxying /api/generate → ${GENERATE_API}`);
 });

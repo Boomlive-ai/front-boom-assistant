@@ -4,7 +4,23 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Boom AI Assistant</title>
-    <link rel="stylesheet" href="/style.css" />
+
+    <!-- Runs before anything else loads. Folder-style URLs need a "/" at the
+         end, otherwise the browser looks for style.css and script.js one level
+         too high and finds the wrong site. Must stay inline here — script.js is
+         one of the files that fails to load in exactly this situation. -->
+    <script>
+      (function () {
+        var p = location.pathname;
+        // The "." check leaves real file names (e.g. /foo/index.html) alone.
+        if (!p.endsWith('/') && !p.split('/').pop().includes('.')) {
+          location.replace(p + '/' + location.search + location.hash);
+        }
+      })();
+    </script>
+
+    <!-- Paths here are relative on purpose — see README "Two addresses". -->
+    <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <header class="topbar">
@@ -149,6 +165,6 @@
       <div id="toast" class="toast" role="status" aria-live="polite"></div>
     </main>
 
-    <script src="/script.js"></script>
+    <script src="script.js"></script>
   </body>
 </html>
