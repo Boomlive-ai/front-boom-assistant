@@ -356,6 +356,26 @@ a {
   background: #b71c1c;
 }
 
+/* ---------- site footer ---------- */
+.sitefoot {
+  background: #fff;
+  border-top: 1px solid #e5e5e5;
+  padding: 18px 40px;
+}
+.sitefoot-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px 28px;
+  font-size: 14px;
+  color: #555;
+}
+.sitefoot-links a:hover {
+  color: #ee3124;
+  text-decoration: underline;
+}
+
 /* ---------- responsive ---------- */
 @media (max-width: 640px) {
   .card {
@@ -369,6 +389,13 @@ a {
   }
   .topbar-nav {
     gap: 14px;
+    font-size: 13px;
+  }
+  .sitefoot {
+    padding: 16px 18px;
+  }
+  .sitefoot-links {
+    gap: 10px 18px;
     font-size: 13px;
   }
 }
