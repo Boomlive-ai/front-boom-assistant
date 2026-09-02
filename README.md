@@ -138,12 +138,10 @@ language with no token set returns a `500` naming the variable to add. To
 change a category, or when a token expires, update `.env` (or the platform's
 env vars) and restart — nothing in the browser changes.
 
-**Copy Feed JSON** copies the exact payload without sending it, which is the
-quickest way to check a mapping before creating anything.
-
 The mapping lives in `buildFeedPayload()` in `public/script.js`. It combines the
-generated output, the form values that were submitted, and those three inputs.
-Two parts are best-guess and worth confirming against the CMS:
+generated output and the form values that were submitted; the session token and
+the category are added by the server. Two parts are best-guess and worth
+confirming against the CMS:
 
 - `CLAIM_RATING` — the number stored for each verdict. Only `False → 2` is
   confirmed from the sample payload.

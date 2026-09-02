@@ -71,7 +71,7 @@ Each rendered block starts read-only with an Edit/Save toggle. Saving writes the
 1. `currentResponse` — the generated output, after any Edit/Save changes.
 2. `currentRequest` — the submitted form values, saved in the submit handler *only after a successful generate*, so it always describes the same story as `currentResponse`. Setting it earlier pairs new form values with the previous story when a generate fails. The payload needs the claim, source, caption and URLs, and none of those come back from `/generate`.
 
-The Create Feed box has no inputs. `sessionId` and `categoryId` are built as `''` and stamped in by `/api/create-feed`, so no token and no configuration lives in the page — Copy Feed JSON shows both blank on purpose. `image` is a `''` constant for the same reason the box lost its inputs, which leaves `mediaIds` / `fastcheck_media` as empty arrays.
+The Create Feed box has no inputs. `sessionId` and `categoryId` are built as `''` and stamped in by `/api/create-feed`, so no token and no configuration lives in the page. `image` is a `''` constant for the same reason the box lost its inputs, which leaves `mediaIds` / `fastcheck_media` as empty arrays.
 
 Unlike `/generate`, blanks are **not** stripped: the sample payload includes empty strings (`news_speech_file_path: ""`), so every key is always sent.
 

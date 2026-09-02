@@ -392,7 +392,6 @@ copyAllBtn.addEventListener('click', () => {
    ========================================================================== */
 
 const createFeedBtn = document.getElementById('create-feed-btn');
-const copyFeedBtn = document.getElementById('copy-feed-json');
 const feedResult = document.getElementById('feed-result');
 
 // Numeric rating Hocalwire stores for the verdict. Only False → 2 is confirmed
@@ -646,7 +645,7 @@ function buildFeedPayload() {
     seo_description: truncate(strapline, 160),
     // Left empty on purpose. The session token is a credential, so it lives in
     // the server's environment: api/create-feed picks the one matching the
-    // `language` key below. Copy Feed JSON therefore shows it blank.
+    // `language` key below.
     sessionId: '',
     show_claim_review: true,
     show_fast_check: true,
@@ -737,19 +736,4 @@ createFeedBtn.addEventListener('click', async () => {
   } finally {
     setFeedLoading(false);
   }
-});
-
-// Handy for checking exactly what would be sent before sending it.
-copyFeedBtn.addEventListener('click', () => {
-  let payload;
-  try {
-    payload = buildFeedPayload();
-  } catch (err) {
-    showToast(err.message, true);
-    return;
-  }
-  navigator.clipboard.writeText(JSON.stringify(payload, null, 2)).then(
-    () => showToast('Feed payload copied as JSON'),
-    () => showToast('Copy failed', true)
-  );
 });
