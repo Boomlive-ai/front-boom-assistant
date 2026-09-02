@@ -1,7 +1,6 @@
 // server.js
 // Small Express server that serves the SEO Optimizer UI and proxies
-// the /generate call to your FastAPI backend so the browser doesn't
-// have to deal with CORS.
+// the upstream API calls so the browser doesn't have to deal with CORS.
 
 const express = require('express');
 const path = require('path');
@@ -11,6 +10,9 @@ const PORT = process.env.PORT || 3000;
 const GENERATE_API =
   process.env.GENERATE_API ||
   'https://boom-assistant.vps.boomlive.in/generate';
+const CREATE_FEED_API =
+  process.env.CREATE_FEED_API ||
+  'https://microservices.coolify.vps.boomlive.in/api/hocalwire/createFeedV2';
 
 // The app answers on two addresses: the Coolify root URL, and a folder path on
 // another host (https://toolbox.boomlive.in/front-boom-assistant). A reverse
@@ -26,10 +28,12 @@ const router = express.Router();
 
 router.use(express.static(path.join(__dirname, 'public')));
 
-// Proxy endpoint — forwards the JSON body to the FastAPI /generate route.
-router.post('/api/generate', async (req, res) => {
+// Every proxy here is the same dumb pipe: forward req.body verbatim, mirror the
+// upstream status code and Content-Type back to the browser. It exists only to
+// dodge CORS, so it never validates or reshapes the field schema.
+async function proxyJson(targetUrl, req, res) {
   try {
-    const upstream = await fetch(GENERATE_API, {
+    const upstream = await fetch(targetUrl, {
       method: 'POST',
       headers: {
         accept: 'application/json',
@@ -48,12 +52,20 @@ router.post('/api/generate', async (req, res) => {
   } catch (err) {
     console.error('Proxy error:', err);
     res.status(502).json({
-      error: 'Failed to reach the /generate API.',
+      error: `Failed to reach ${targetUrl}`,
       detail: String(err && err.message ? err.message : err),
-      hint: `Is the FastAPI server running at ${GENERATE_API}?`,
+      hint: `Is the upstream service reachable at ${targetUrl}?`,
     });
   }
-});
+}
+
+// Proxy endpoint — forwards the JSON body to the FastAPI /generate route.
+router.post('/api/generate', (req, res) => proxyJson(GENERATE_API, req, res));
+
+// Proxy endpoint — forwards the built feed payload to Hocalwire createFeedV2.
+router.post('/api/create-feed', (req, res) =>
+  proxyJson(CREATE_FEED_API, req, res)
+);
 
 router.get('/health', (_req, res) => res.json({ ok: true }));
 
@@ -70,5 +82,6 @@ app.listen(PORT, () => {
   if (BASE_PATH) {
     console.log(`Also serving under http://localhost:${PORT}${BASE_PATH}/`);
   }
-  console.log(`Proxying /api/generate → ${GENERATE_API}`);
+  console.log(`Proxying /api/generate    → ${GENERATE_API}`);
+  console.log(`Proxying /api/create-feed → ${CREATE_FEED_API}`);
 });

@@ -399,3 +399,89 @@ a {
     font-size: 13px;
   }
 }
+
+/* ---------- create feed box ---------- */
+.feed-box {
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  padding: 18px 16px 16px;
+  margin-top: 24px;
+  background: #fbfbfb;
+}
+.feed-box h3 {
+  margin: 0 0 4px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 19px;
+}
+.feed-note {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: #777;
+}
+.feed-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px 16px;
+}
+.feed-grid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #444;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+.feed-grid label.wide {
+  grid-column: 1 / -1;
+}
+.feed-grid input {
+  width: 100%;
+  border: 1px solid #e0e0e0;
+  border-radius: 3px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  color: #222;
+  background: #fff;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+}
+.feed-grid input:focus {
+  outline: none;
+  border-color: #2b6cff;
+  box-shadow: 0 0 0 2px rgba(43, 108, 255, 0.15);
+}
+.feed-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+.feed-result {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border-radius: 3px;
+  border: 1px solid #c1e1c9;
+  background: #f2f9f4;
+  color: #1a6b2d;
+  font-family: 'SF Mono', Consolas, 'Courier New', monospace;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 260px;
+  overflow: auto;
+}
+.feed-result.error {
+  border-color: #f5c2bd;
+  background: #fdecea;
+  color: #b71c1c;
+}
+
+@media (max-width: 640px) {
+  .feed-grid {
+    grid-template-columns: 1fr;
+  }
+}

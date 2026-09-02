@@ -23,9 +23,10 @@ Open <http://localhost:3000>.
 
 | Var           | Default                                | Purpose                                  |
 |---------------|----------------------------------------|------------------------------------------|
-| `PORT`        | `3000`                                 | Port the web UI runs on                  |
-| `GENERATE_API`| the deployed BOOM VPS `/generate` URL  | Upstream FastAPI endpoint                |
-| `BASE_PATH`   | `/front-boom-assistant`                | Extra folder path to also serve under    |
+| `PORT`           | `3000`                                | Port the web UI runs on                  |
+| `GENERATE_API`   | the deployed BOOM VPS `/generate` URL | Upstream FastAPI endpoint                |
+| `CREATE_FEED_API`| the Hocalwire `createFeedV2` URL      | Upstream endpoint for **Create Feed**    |
+| `BASE_PATH`      | `/front-boom-assistant`               | Extra folder path to also serve under    |
 
 Example:
 
@@ -46,7 +47,8 @@ The app answers on **both** of these at the same time:
 Two things make this work, and both must be kept:
 
 1. **Internal links in `public/` never start with `/`.** They are written as
-   `style.css`, `script.js` and `api/generate`. A leading slash means "go back
+   `style.css`, `script.js`, `api/generate` and `api/create-feed`. A leading
+   slash means "go back
    to the top of the website", which on the toolbox host lands on the PHP app.
    Adding a `/` in front of any of these silently breaks the folder address.
 2. **The routes are mounted twice** — at `BASE_PATH` and at `/` — so it does not
@@ -80,6 +82,32 @@ Fields rendered:
 - `short_tail_keywords`, `long_tail_keywords`, `story_tags` (one per line)
 - `suggested_rating` shown as a colored pill
 - `usage` + `elapsed_seconds` shown as a footer line
+
+## Create Feed
+
+Below the generated output there is a **Create Feed** box that pushes the story
+into Hocalwire as a new feed.
+
+1. Fill in the three values the story cannot supply on its own — **Image URL**,
+   **Category ID** (`796` by default) and **Session ID**.
+2. Click **Create Feed**. The browser builds the full payload and POSTs it to
+   `api/create-feed`, which `server.js` forwards to `CREATE_FEED_API`.
+3. The upstream reply is printed in the box — green on success, red on failure.
+
+**Copy Feed JSON** copies the exact payload without sending it, which is the
+quickest way to check a mapping before creating anything.
+
+The mapping lives in `buildFeedPayload()` in `public/script.js`. It combines the
+generated output, the form values that were submitted, and those three inputs.
+Two parts are best-guess and worth confirming against the CMS:
+
+- `CLAIM_RATING` — the number stored for each verdict. Only `False → 2` is
+  confirmed from the sample payload.
+- `FEED_TEXT` — the fixed labels (`location`, `reviewed_by`, interview question
+  and answer, and so on), one set per language.
+
+`slug`, `long_tail_keywords` and `story_tags` are generated but have no matching
+key in the feed payload, so they are not sent.
 
 ## Files
 

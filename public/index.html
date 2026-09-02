@@ -158,6 +158,47 @@
 
         <div id="fields-container"></div>
 
+        <!-- Create Feed — builds the Hocalwire payload from the generated
+             output above and POSTs it through the api/create-feed proxy. -->
+        <div class="feed-box">
+          <h3>Create Feed</h3>
+          <p class="feed-note">
+            Sends this story to Hocalwire as a new feed. Fill the three values
+            below — they cannot be worked out from the generated text.
+          </p>
+
+          <div class="feed-grid">
+            <label class="wide">
+              Image URL
+              <input
+                type="url"
+                id="feed-image"
+                placeholder="https://www.boomlive.in/h-upload/…jpg"
+              />
+            </label>
+            <label>
+              Category ID
+              <input type="text" id="feed-category" value="796" />
+            </label>
+            <label>
+              Session ID
+              <input type="text" id="feed-session" placeholder="RDWEBJ79CXQ…" />
+            </label>
+          </div>
+
+          <div class="feed-actions">
+            <button type="button" id="create-feed-btn" class="btn primary">
+              <span class="btn-label">Create Feed</span>
+              <span class="spinner" aria-hidden="true"></span>
+            </button>
+            <button type="button" id="copy-feed-json" class="btn ghost">
+              Copy Feed JSON
+            </button>
+          </div>
+
+          <pre id="feed-result" class="feed-result" hidden></pre>
+        </div>
+
         <p class="usage-line" id="usage-line"></p>
       </section>
 

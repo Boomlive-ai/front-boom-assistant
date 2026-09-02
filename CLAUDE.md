@@ -27,18 +27,18 @@ Requires Node 18+ — `server.js` uses global `fetch` with no polyfill.
 
 ## Architecture
 
-Three tiers: a static vanilla-JS browser app → a thin Express proxy → an upstream FastAPI `/generate` service.
+Three tiers: a static vanilla-JS browser app → a thin Express proxy → two upstream services (the FastAPI `/generate` service, and the Hocalwire `createFeedV2` endpoint).
 
-**`server.js`** does two things: serve `public/` statically, and proxy `POST /api/generate` to `GENERATE_API`. The proxy is deliberately dumb — it forwards `req.body` verbatim and mirrors the upstream status code and `Content-Type` back to the browser. It exists only to dodge CORS, so it never validates, reshapes, or knows the field schema. Upstream failures become a `502` with an `error`/`detail`/`hint` body.
+**`server.js`** does two things: serve `public/` statically, and proxy two POST routes — `/api/generate` → `GENERATE_API`, and `/api/create-feed` → `CREATE_FEED_API`. Both share one `proxyJson(targetUrl, req, res)` helper that is deliberately dumb — it forwards `req.body` verbatim and mirrors the upstream status code and `Content-Type` back to the browser. It exists only to dodge CORS, so it never validates, reshapes, or knows the field schema. Upstream failures become a `502` with an `error`/`detail`/`hint` body.
 
-The `GENERATE_API` default in `server.js` is a deployed BOOM VPS URL, not `127.0.0.1:8000`.
+Both API defaults in `server.js` are deployed BOOM VPS URLs, not `127.0.0.1`.
 
 ## The app must keep working on two addresses
 
 It is served both at a root URL (Coolify) and at a folder path on a host whose root belongs to a **different** app (`https://toolbox.boomlive.in/front-boom-assistant/`). Two mechanisms keep that true, and both are easy to break:
 
-- **Never write a leading `/` on an internal link in `public/`.** They are relative on purpose — `style.css`, `script.js`, `api/generate`. A leading slash resolves against the host root, which on the toolbox host is the unrelated PHP app. `style.css` contains no `url()` or `@import`, so those three are the complete set.
-- **Links that leave this app stay absolute**, and are not covered by the rule above: `GENERATE_API` in `server.js`, plus the header Home link and the footer Privacy Policy / Data Deletion links, which point at `https://toolbox.boomlive.in/…`. Those pages belong to the PHP app, so they must resolve to the toolbox host even when this app is served from the Coolify address. Making them relative would break them there.
+- **Never write a leading `/` on an internal link in `public/`.** They are relative on purpose — `style.css`, `script.js`, `api/generate`, `api/create-feed`. A leading slash resolves against the host root, which on the toolbox host is the unrelated PHP app. `style.css` contains no `url()` or `@import`, so those four are the complete set.
+- **Links that leave this app stay absolute**, and are not covered by the rule above: `GENERATE_API` and `CREATE_FEED_API` in `server.js`, plus the header Home link and the footer Privacy Policy / Data Deletion links, which point at `https://toolbox.boomlive.in/…`. Those pages belong to the PHP app, so they must resolve to the toolbox host even when this app is served from the Coolify address. Making them relative would break them there.
 - **The handlers live on an `express.Router()` mounted twice** — at `BASE_PATH` (default `/front-boom-assistant`) and at `/` — so the app works whether or not the reverse proxy strips the folder. Adding a route with `app.get`/`app.post` instead of `router.get`/`router.post` makes it reachable at the root only. The root mount is also what keeps `/health` available to the Docker `HEALTHCHECK`, which calls `127.0.0.1` directly.
 
 Relative links depend on a trailing slash. Two independent guards supply it: Express 301-redirects `/front-boom-assistant` → `/front-boom-assistant/` when it sees the prefix, and an inline script at the top of `index.html` covers the case where the proxy has already stripped it. That script cannot move into `script.js` — it exists precisely because `script.js` fails to load in that situation.
@@ -60,10 +60,24 @@ Each rendered block starts read-only with an Edit/Save toggle. Saving writes the
 
 `extractErrorMessage` normalizes the several error shapes the backend can return, including FastAPI's `{detail: [{loc, msg, type}]}` validation array, which it flattens into `field.path: message` strings.
 
+## Create Feed
+
+`buildFeedPayload()` maps the generated story onto the ~59 keys Hocalwire's `createFeedV2` expects. It reads from three sources, so all three must be intact:
+
+1. `currentResponse` — the generated output, after any Edit/Save changes.
+2. `currentRequest` — the submitted form values, saved in the submit handler. The payload needs the claim, source, caption and URLs, and none of those come back from `/generate`.
+3. The three inputs in the Create Feed box (`#feed-image`, `#feed-category`, `#feed-session`), which hold values that cannot be derived from any text.
+
+Unlike `/generate`, blanks are **not** stripped: the sample payload includes empty strings (`news_speech_file_path: ""`), so every key is always sent.
+
+Two things in there are guesses that should be confirmed against the CMS: the `CLAIM_RATING` map (only `False → 2` is confirmed from the sample payload), and the per-language constants in `FEED_TEXT`. `slug`, `long_tail_keywords` and `story_tags` are generated but have no matching key in the payload, so they are dropped.
+
+`markdownToHtml` exists because the CMS stores `story` as HTML while the model returns Markdown. It escapes text first, so no raw HTML from the model can reach the payload.
+
 ## Repo state to be aware of
 
 - `node_modules/` is committed to git and `.gitignore` is empty.
-- `escapeHtml` in `script.js` is dead code — the renderer builds DOM nodes and assigns `.textContent` / `.value`, never HTML strings.
+- `escapeHtml` in `script.js` is used only by `markdownToHtml`. The renderer never touches it — it builds DOM nodes and assigns `.textContent` / `.value`, never HTML strings.
 - The `package.json` name is still `seo-optimizer`, while the repo and the folder path are `front-boom-assistant`.
 
 
