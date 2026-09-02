@@ -138,6 +138,20 @@ language with no token set returns a `500` naming the variable to add. To
 change a category, or when a token expires, update `.env` (or the platform's
 env vars) and restart — nothing in the browser changes.
 
+### Seeing what was sent
+
+Pressing **Create Feed** logs in two places, because neither side knows
+everything:
+
+- **Browser console** (F12 → Console) — language, the URL the page posted to,
+  the original article ID and the whole payload. `sessionId` and `categoryId`
+  read blank there, because the server adds them.
+- **Terminal running the server** — language, the real upstream URL, the
+  category, and the session token *masked* (`RDWEBJ79…R11S`). Enough to tell
+  which token was used; never the whole thing, since hosts keep their logs.
+
+The reply from the CMS is logged in the browser too.
+
 The mapping lives in `buildFeedPayload()` in `public/script.js`. It combines the
 generated output and the form values that were submitted; the session token and
 the category are added by the server. Two parts are best-guess and worth

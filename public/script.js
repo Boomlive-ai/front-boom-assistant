@@ -699,6 +699,17 @@ createFeedBtn.addEventListener('click', async () => {
     return;
   }
 
+  // Printed to the browser console (F12 → Console) so it is clear what left the
+  // page. sessionId and categoryId are blank here on purpose — the server adds
+  // them — and the terminal running the server prints those two.
+  console.log('🚀 Sending request with config:');
+  console.log('👉 Language:', payload.language);
+  console.log('👉 URL:', new URL('api/create-feed', location.href).href);
+  console.log('👉 Article ID:', originalArticleId(currentResponse, currentRequest || {}) || '(none)');
+  console.log('👉 SessionId:', '(added by the server, from .env)');
+  console.log('👉 CategoryId:', '(added by the server, from .env)');
+  console.log('👉 Payload:', JSON.stringify(payload, null, 2));
+
   setFeedLoading(true);
   try {
     // Relative on purpose, so the app also works when it is served from a
@@ -722,6 +733,8 @@ createFeedBtn.addEventListener('click', async () => {
     }
     // One short line is all an editor needs. The raw reply is only shown when
     // there is no id in it, so a surprise response is never swallowed.
+    console.log('✅ Feed created. Reply from the CMS:', data ?? text);
+
     const feedId = extractFeedId(data);
     const done = '✅ Feed created successfully!';
     showFeedResult(

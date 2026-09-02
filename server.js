@@ -69,6 +69,14 @@ const SESSION_IDS = {
 // tokens above, changed without touching the code.
 const FEED_CATEGORY_ID = process.env.FEED_CATEGORY_ID || '796';
 
+// Enough of a token to tell one from another in the log, never enough to reuse.
+// Server logs are kept by the host (Coolify keeps them for anyone with access),
+// so a whole session token must not end up in one.
+function maskToken(value) {
+  const s = String(value || '');
+  return s.length > 12 ? `${s.slice(0, 8)}…${s.slice(-4)}` : '***';
+}
+
 // The app answers on two addresses: the Coolify root URL, and a folder path on
 // another host (https://toolbox.boomlive.in/front-boom-assistant). A reverse
 // proxy usually strips that folder before forwarding, but not always — so the
@@ -132,6 +140,16 @@ router.post('/api/create-feed', (req, res) => {
       hint: `Add ${varName} to .env (or to the server's environment variables) and restart the server.`,
     });
   }
+
+  // What actually goes upstream, printed in the terminal running the server.
+  // The payload is logged as the browser sent it — that is, before the token is
+  // stamped in — so the token appears only on its own masked line.
+  console.log('🚀 Sending request with config:');
+  console.log('👉 Language:', lang);
+  console.log('👉 URL:', CREATE_FEED_API);
+  console.log('👉 SessionId:', maskToken(sessionId));
+  console.log('👉 CategoryId:', FEED_CATEGORY_ID);
+  console.log('👉 Payload:', JSON.stringify(req.body, null, 2));
 
   req.body = { ...req.body, sessionId, categoryId: FEED_CATEGORY_ID };
   return proxyJson(CREATE_FEED_API, req, res);

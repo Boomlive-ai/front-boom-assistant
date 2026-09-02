@@ -33,6 +33,8 @@ Three tiers: a static vanilla-JS browser app → a thin Express proxy → two up
 
 The only fields the server knows about are `sessionId` and `categoryId`, and only in the `/api/create-feed` route *before* it calls `proxyJson`. The token is a Hocalwire credential, so it must not sit in the page: the browser sends both keys empty plus the story's `language`, and the route stamps in `SESSION_IDS[language]` (from `SESSION_ID_EN` / `SESSION_ID_HI` / `SESSION_ID_BN`) and `FEED_CATEGORY_ID` (default `796`). A language with no token configured gets a `500` naming the missing variable rather than an empty token going upstream. Keep this transform in the route — `proxyJson` itself stays schema-blind.
 
+Both sides log a create-feed attempt, since neither knows the whole picture: the browser prints the payload it built (with the two blank keys), and the route prints the upstream URL, the category and `maskToken(sessionId)`. Log `req.body` *before* stamping the token in, and keep the mask — Coolify keeps server logs, so a whole token must never reach one.
+
 `loadEnvFile()` reads a `.env` next to `server.js` into `process.env` at startup (no `dotenv` dependency, since `node_modules/` is committed). Already-set variables win, so platform env vars beat the file, and a missing file is skipped silently — which is the normal case in Docker/Coolify. It must keep running before the `process.env` reads below it. `.env` is git-ignored; `.env.example` is the committed template.
 
 Both API defaults in `server.js` are deployed BOOM VPS URLs, not `127.0.0.1`.
