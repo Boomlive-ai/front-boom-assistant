@@ -598,11 +598,6 @@ createFeedBtn.addEventListener('click', async () => {
     return;
   }
 
-  if (!payload.ReviewBoximage_advanced_5) {
-    showToast('Image URL is required.', true);
-    feedImageInput.focus();
-    return;
-  }
   if (!payload.categoryId) {
     showToast('Category ID is required.', true);
     feedCategoryInput.focus();
