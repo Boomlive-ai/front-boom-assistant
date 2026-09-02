@@ -7,7 +7,34 @@ const fieldsContainer = document.getElementById('fields-container');
 const ratingPill = document.getElementById('rating-pill');
 const usageLine = document.getElementById('usage-line');
 const copyAllBtn = document.getElementById('copy-all');
+const translationInfo = document.getElementById('translation-info');
 const toast = document.getElementById('toast');
+
+// Labels for the translation-info box under the output, one set per language,
+// plus the locale used to write the date (`hi-IN` gives "2 सितंबर 2026").
+const INFO_TEXT = {
+  en: {
+    locale: 'en-IN',
+    title: '🔄 Translation info:',
+    articleId: 'Original article ID:',
+    time: 'Translated on:',
+    reviewer: 'Reviewed by:',
+  },
+  hi: {
+    locale: 'hi-IN',
+    title: '🔄 अनुवाद की जानकारी:',
+    articleId: 'मूल लेख ID:',
+    time: 'अनुवाद समय:',
+    reviewer: 'समीक्षाकर्ता:',
+  },
+  bn: {
+    locale: 'bn-IN',
+    title: '🔄 অনুবাদের তথ্য:',
+    articleId: 'মূল নিবন্ধ ID:',
+    time: 'অনুবাদের সময়:',
+    reviewer: 'পর্যালোচক:',
+  },
+};
 
 // Field schema — describes each editable field we render from the API response.
 // `kind` controls how the value is displayed / re-serialized.
@@ -69,6 +96,63 @@ function displayToValue(kind, str) {
   return str;
 }
 
+// ---------- translation info ----------
+// The id of the story this one was translated from. The API may hand it over
+// itself; otherwise it is the number BOOM article URLs end with, e.g.
+// …/bihar-bridge-photo-fact-check-32124. Blank when there is neither, and then
+// the line is left out rather than showing an empty label.
+function originalArticleId(res, req) {
+  const fromApi =
+    res.original_article_id ?? res.source_article_id ?? res.article_id;
+  if (fromApi != null && String(fromApi).trim()) return String(fromApi).trim();
+
+  const url = (req.article_url || '').trim();
+  const path = url.split(/[?#]/)[0].replace(/\/+$/, '');
+  const match = path.match(/(\d{4,})$/);
+  return match ? match[1] : '';
+}
+
+// One label + value line. Built as DOM nodes like the rest of the renderer, so
+// nothing from the API is ever treated as HTML.
+function infoRow(label, value) {
+  const row = document.createElement('p');
+  row.className = 'info-row';
+
+  const strong = document.createElement('span');
+  strong.className = 'info-label';
+  strong.textContent = label;
+
+  row.appendChild(strong);
+  row.appendChild(document.createTextNode(' ' + value));
+  return row;
+}
+
+function renderTranslationInfo(data) {
+  const req = currentRequest || {};
+  const t = INFO_TEXT[req.language] || INFO_TEXT.en;
+
+  const title = document.createElement('p');
+  title.className = 'info-title';
+  title.textContent = t.title;
+
+  translationInfo.innerHTML = '';
+  translationInfo.appendChild(title);
+
+  const articleId = originalArticleId(data, req);
+  if (articleId) translationInfo.appendChild(infoRow(t.articleId, articleId));
+
+  // Written in the story's own language: "2 सितंबर 2026", "২ সেপ্টেম্বর ২০২৬".
+  const when = new Date().toLocaleDateString(t.locale, {
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
+  translationInfo.appendChild(infoRow(t.time, when));
+  translationInfo.appendChild(infoRow(t.reviewer, 'BOOM'));
+
+  translationInfo.hidden = false;
+}
+
 // ---------- render response ----------
 function renderResponse(data) {
   currentResponse = data;
@@ -88,6 +172,8 @@ function renderResponse(data) {
     if (!(f.key in data)) return;
     fieldsContainer.appendChild(buildFieldBlock(f, data[f.key]));
   });
+
+  renderTranslationInfo(data);
 
   // Usage
   if (data.usage) {
@@ -582,9 +668,10 @@ function buildFeedPayload() {
 function setFeedLoading(loading) {
   createFeedBtn.disabled = loading;
   createFeedBtn.classList.toggle('loading', loading);
+  // Keep the emoji — this overwrites the label set in index.html.
   createFeedBtn.querySelector('.btn-label').textContent = loading
-    ? 'Creating…'
-    : 'Create Feed';
+    ? '⏳ Creating…'
+    : '📝 Create Feed';
 }
 
 function showFeedResult(text, isError) {
@@ -637,11 +724,12 @@ createFeedBtn.addEventListener('click', async () => {
     // One short line is all an editor needs. The raw reply is only shown when
     // there is no id in it, so a surprise response is never swallowed.
     const feedId = extractFeedId(data);
+    const done = '✅ Feed created successfully!';
     showFeedResult(
-      feedId ? `Feed created — ${feedId}` : text || 'Feed created',
+      feedId ? `${done} (ID: ${feedId})` : `${done}\n${text}`.trim(),
       false
     );
-    showToast(feedId ? `Feed created — ${feedId}` : 'Feed created');
+    showToast(done);
   } catch (err) {
     console.error(err);
     showFeedResult(err.message || 'Request failed', true);

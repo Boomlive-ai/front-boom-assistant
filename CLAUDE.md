@@ -75,7 +75,13 @@ The Create Feed box has no inputs. `sessionId` and `categoryId` are built as `''
 
 Unlike `/generate`, blanks are **not** stripped: the sample payload includes empty strings (`news_speech_file_path: ""`), so every key is always sent.
 
-On success the box shows one line — `Feed created — <id>`, from `extractFeedId()` — not the raw JSON. A reply with no recognisable id falls back to printing the raw text, so an unexpected response is never swallowed.
+On success the box shows one line — `✅ Feed created successfully! (ID: <id>)`, from `extractFeedId()` — not the raw JSON. A reply with no recognisable id prints the raw text under that line, so an unexpected response is never swallowed. `setFeedLoading` rewrites the button label, so the `📝` / `⏳` emoji live there as well as in `index.html`.
+
+## Translation info box
+
+`renderTranslationInfo()` fills `#translation-info` under the fields on every render. Labels come from `INFO_TEXT`, a third per-language table alongside `FEED_TEXT` (payload strings) and the `language` radios — a new language needs an entry in all three. Its `locale` also formats the date, so Hindi reads `2 सितंबर 2026` and Bangla `২ সেপ্টেম্বর, ২০২৬`.
+
+`originalArticleId()` prefers `original_article_id` / `source_article_id` / `article_id` from the response, then falls back to the trailing number of `article_url` (BOOM URLs end in the story id). When neither exists the ID row is omitted entirely rather than rendered empty — `article_url` is an optional form field, so this is the normal case for an unpublished story.
 
 Two things in there are guesses that should be confirmed against the CMS: the `CLAIM_RATING` map (only `False → 2` is confirmed from the sample payload), and the per-language constants in `FEED_TEXT`. `slug`, `long_tail_keywords` and `story_tags` are generated but have no matching key in the payload, so they are dropped.
 

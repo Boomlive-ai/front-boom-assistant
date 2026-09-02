@@ -158,6 +158,10 @@
 
         <div id="fields-container"></div>
 
+        <!-- Translation info — filled in by renderResponse() in the language
+             the story was generated in, so it is empty until then. -->
+        <div id="translation-info" class="info-box" hidden></div>
+
         <!-- Create Feed — builds the Hocalwire payload from the generated
              output above and POSTs it through the api/create-feed proxy. -->
         <div class="feed-box">
@@ -169,8 +173,8 @@
           </p>
 
           <div class="feed-actions">
-            <button type="button" id="create-feed-btn" class="btn primary">
-              <span class="btn-label">Create Feed</span>
+            <button type="button" id="create-feed-btn" class="btn feed-main">
+              <span class="btn-label">📝 Create Feed</span>
               <span class="spinner" aria-hidden="true"></span>
             </button>
             <button type="button" id="copy-feed-json" class="btn ghost">

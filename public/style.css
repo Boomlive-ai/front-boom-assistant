@@ -400,6 +400,29 @@ a {
   }
 }
 
+/* ---------- translation info box ---------- */
+.info-box {
+  margin-top: 20px;
+  padding: 14px 16px;
+  border-radius: 4px;
+  border-left: 4px solid #34a853;
+  background: #f0f9f2;
+  color: #1f3d29;
+  font-size: 14px;
+  line-height: 1.5;
+}
+.info-title {
+  margin: 0 0 8px;
+  font-weight: 700;
+  font-size: 15px;
+}
+.info-row {
+  margin: 4px 0 0;
+}
+.info-label {
+  font-weight: 600;
+}
+
 /* ---------- create feed box ---------- */
 .feed-box {
   border: 1px solid #d9d9d9;
@@ -418,29 +441,53 @@ a {
   font-size: 13px;
   color: #777;
 }
+/* A column, so the main button gets the full width of the box. */
 .feed-actions {
   display: flex;
+  flex-direction: column;
   gap: 10px;
   margin-top: 16px;
-  flex-wrap: wrap;
+}
+/* The one green button in the app — the last step, after the red Generate. */
+.btn.feed-main {
+  width: 100%;
+  justify-content: center;
+  padding: 13px 22px;
+  font-weight: 600;
+  background: linear-gradient(180deg, #4caf72, #3c9c62);
+  border-color: #3c9c62;
+  color: #fff;
+}
+.btn.feed-main:hover {
+  background: linear-gradient(180deg, #45a76a, #358c57);
+}
+.btn.feed-main:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
 }
 .feed-result {
-  margin: 14px 0 0;
-  padding: 10px 12px;
-  border-radius: 3px;
+  margin: 4px 0 0;
+  padding: 11px 12px;
+  border-radius: 4px;
   border: 1px solid #c1e1c9;
   background: #f2f9f4;
   color: #1a6b2d;
-  font-family: 'SF Mono', Consolas, 'Courier New', monospace;
-  font-size: 12.5px;
+  /* It is a <pre>, which would otherwise be monospace. */
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
   white-space: pre-wrap;
   word-break: break-word;
   max-height: 260px;
   overflow: auto;
 }
+/* Errors can be long and technical, so they read better left-aligned. */
 .feed-result.error {
   border-color: #f5c2bd;
   background: #fdecea;
   color: #b71c1c;
+  font-weight: 400;
+  text-align: left;
 }
 

@@ -101,6 +101,23 @@ Fields rendered:
 - `suggested_rating` shown as a colored pill
 - `usage` + `elapsed_seconds` shown as a footer line
 
+Under the fields sits a **translation info** box, written in the language the
+story was generated in:
+
+```
+🔄 अनुवाद की जानकारी:
+मूल लेख ID: 32124
+अनुवाद समय: 2 सितंबर 2026
+समीक्षाकर्ता: BOOM
+```
+
+The date is today's, in that language's script. The original article ID comes
+from the API response if it sends one (`original_article_id`,
+`source_article_id` or `article_id`), otherwise from the number a BOOM article
+URL ends with — `…/bihar-bridge-photo-fact-check-32124`. With neither, the ID
+line is left out and the other two still show. Labels live in `INFO_TEXT` in
+`public/script.js`.
+
 ## Create Feed
 
 Below the generated output there is a **Create Feed** box that pushes the story
@@ -109,8 +126,8 @@ into Hocalwire as a new feed.
 1. Click **Create Feed** — there is nothing to fill in. The browser builds the
    full payload and POSTs it to `api/create-feed`, which `server.js` forwards
    to `CREATE_FEED_API`.
-2. Success shows one green line, `Feed created — 4916`. A failure shows the
-   error message in red.
+2. Success shows one green line, `✅ Feed created successfully! (ID: 4916)`.
+   A failure shows the error message in red.
 
 The box has no input fields. The payload leaves the browser with `sessionId`
 and `categoryId` empty, and `/api/create-feed` fills them in from the server's
