@@ -64,6 +64,11 @@ const SESSION_IDS = {
   bn: process.env.SESSION_ID_BN || '',
 };
 
+// Hocalwire section the feed is filed under. It was a text box in the page that
+// nobody ever changed from 796, so it is a setting now — same place as the
+// tokens above, changed without touching the code.
+const FEED_CATEGORY_ID = process.env.FEED_CATEGORY_ID || '796';
+
 // The app answers on two addresses: the Coolify root URL, and a folder path on
 // another host (https://toolbox.boomlive.in/front-boom-assistant). A reverse
 // proxy usually strips that folder before forwarding, but not always — so the
@@ -113,9 +118,9 @@ async function proxyJson(targetUrl, req, res) {
 router.post('/api/generate', (req, res) => proxyJson(GENERATE_API, req, res));
 
 // Proxy endpoint — forwards the built feed payload to Hocalwire createFeedV2.
-// The single exception to the dumb-pipe rule above: sessionId is a credential,
-// so the browser never holds it. The payload arrives with sessionId empty, and
-// the token for the story's own language is stamped in here.
+// The single exception to the dumb-pipe rule above: the two settings values.
+// The browser sends sessionId and categoryId empty and they are stamped in
+// here, so no token and no configuration has to live in the page.
 router.post('/api/create-feed', (req, res) => {
   const lang = String((req.body && req.body.language) || '').toLowerCase();
   const sessionId = SESSION_IDS[lang];
@@ -128,7 +133,7 @@ router.post('/api/create-feed', (req, res) => {
     });
   }
 
-  req.body = { ...req.body, sessionId };
+  req.body = { ...req.body, sessionId, categoryId: FEED_CATEGORY_ID };
   return proxyJson(CREATE_FEED_API, req, res);
 });
 
@@ -149,6 +154,7 @@ app.listen(PORT, () => {
   }
   console.log(`Proxying /api/generate    → ${GENERATE_API}`);
   console.log(`Proxying /api/create-feed → ${CREATE_FEED_API}`);
+  console.log(`Feed category ID          → ${FEED_CATEGORY_ID}`);
   // Names only, never the tokens themselves — this line ends up in server logs.
   const withToken = Object.keys(SESSION_IDS).filter((l) => SESSION_IDS[l]);
   console.log(

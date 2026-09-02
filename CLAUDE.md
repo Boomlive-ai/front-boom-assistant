@@ -31,7 +31,7 @@ Three tiers: a static vanilla-JS browser app → a thin Express proxy → two up
 
 **`server.js`** does two things: serve `public/` statically, and proxy two POST routes — `/api/generate` → `GENERATE_API`, and `/api/create-feed` → `CREATE_FEED_API`. Both share one `proxyJson(targetUrl, req, res)` helper that is deliberately dumb — it forwards `req.body` verbatim and mirrors the upstream status code and `Content-Type` back to the browser. It exists only to dodge CORS, so it never validates, reshapes, or knows the field schema. Upstream failures become a `502` with an `error`/`detail`/`hint` body.
 
-The one field the server does know about is `sessionId`, and only in the `/api/create-feed` route *before* it calls `proxyJson`. The token is a Hocalwire credential, so it must not sit in the page: the browser sends `sessionId: ''` plus the story's `language`, and the route stamps in `SESSION_IDS[language]` (from `SESSION_ID_EN` / `SESSION_ID_HI` / `SESSION_ID_BN`). A language with no token configured gets a `500` naming the missing variable rather than an empty token going upstream. Keep this transform in the route — `proxyJson` itself stays schema-blind.
+The only fields the server knows about are `sessionId` and `categoryId`, and only in the `/api/create-feed` route *before* it calls `proxyJson`. The token is a Hocalwire credential, so it must not sit in the page: the browser sends both keys empty plus the story's `language`, and the route stamps in `SESSION_IDS[language]` (from `SESSION_ID_EN` / `SESSION_ID_HI` / `SESSION_ID_BN`) and `FEED_CATEGORY_ID` (default `796`). A language with no token configured gets a `500` naming the missing variable rather than an empty token going upstream. Keep this transform in the route — `proxyJson` itself stays schema-blind.
 
 `loadEnvFile()` reads a `.env` next to `server.js` into `process.env` at startup (no `dotenv` dependency, since `node_modules/` is committed). Already-set variables win, so platform env vars beat the file, and a missing file is skipped silently — which is the normal case in Docker/Coolify. It must keep running before the `process.env` reads below it. `.env` is git-ignored; `.env.example` is the committed template.
 
@@ -66,13 +66,16 @@ Each rendered block starts read-only with an Edit/Save toggle. Saving writes the
 
 ## Create Feed
 
-`buildFeedPayload()` maps the generated story onto the ~59 keys Hocalwire's `createFeedV2` expects. It reads from three sources, so all three must be intact:
+`buildFeedPayload()` maps the generated story onto the ~59 keys Hocalwire's `createFeedV2` expects. It reads from two sources, so both must be intact:
 
 1. `currentResponse` — the generated output, after any Edit/Save changes.
 2. `currentRequest` — the submitted form values, saved in the submit handler *only after a successful generate*, so it always describes the same story as `currentResponse`. Setting it earlier pairs new form values with the previous story when a generate fails. The payload needs the claim, source, caption and URLs, and none of those come back from `/generate`.
-3. The two inputs in the Create Feed box (`#feed-image`, `#feed-category`), which hold values that cannot be derived from any text. `sessionId` is deliberately built as `''` and filled in by the server, so `buildFeedPayload()` never reads a token — Copy Feed JSON shows it blank on purpose.
+
+The Create Feed box has no inputs. `sessionId` and `categoryId` are built as `''` and stamped in by `/api/create-feed`, so no token and no configuration lives in the page — Copy Feed JSON shows both blank on purpose. `image` is a `''` constant for the same reason the box lost its inputs, which leaves `mediaIds` / `fastcheck_media` as empty arrays.
 
 Unlike `/generate`, blanks are **not** stripped: the sample payload includes empty strings (`news_speech_file_path: ""`), so every key is always sent.
+
+On success the box shows one line — `Feed created — <id>`, from `extractFeedId()` — not the raw JSON. A reply with no recognisable id falls back to printing the raw text, so an unexpected response is never swallowed.
 
 Two things in there are guesses that should be confirmed against the CMS: the `CLAIM_RATING` map (only `False → 2` is confirmed from the sample payload), and the per-language constants in `FEED_TEXT`. `slug`, `long_tail_keywords` and `story_tags` are generated but have no matching key in the payload, so they are dropped.
 

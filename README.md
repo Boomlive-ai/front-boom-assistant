@@ -30,6 +30,7 @@ Open <http://localhost:3000>.
 | `SESSION_ID_EN`  | _(none)_                              | Hocalwire session token for English stories |
 | `SESSION_ID_HI`  | _(none)_                              | Hocalwire session token for Hindi stories   |
 | `SESSION_ID_BN`  | _(none)_                              | Hocalwire session token for Bangla stories  |
+| `FEED_CATEGORY_ID`| `796`                                | Hocalwire section new feeds are filed under |
 
 Example:
 
@@ -105,18 +106,20 @@ Fields rendered:
 Below the generated output there is a **Create Feed** box that pushes the story
 into Hocalwire as a new feed.
 
-1. Fill in the two values the story cannot supply on its own — **Image URL**
-   (optional) and **Category ID** (`796` by default).
-2. Click **Create Feed**. The browser builds the full payload and POSTs it to
-   `api/create-feed`, which `server.js` forwards to `CREATE_FEED_API`.
-3. The upstream reply is printed in the box — green on success, red on failure.
+1. Click **Create Feed** — there is nothing to fill in. The browser builds the
+   full payload and POSTs it to `api/create-feed`, which `server.js` forwards
+   to `CREATE_FEED_API`.
+2. Success shows one green line, `Feed created — 4916`. A failure shows the
+   error message in red.
 
-There is no Session ID box. The payload leaves the browser with `sessionId`
-empty, and `/api/create-feed` fills it in from `SESSION_ID_EN` / `SESSION_ID_HI`
-/ `SESSION_ID_BN` according to the story's `language`, so the token is never
-typed in or visible in the page. A language with no token set returns a `500`
-naming the variable to add. When a token expires, update `.env` (or the
-platform's env vars) and restart — nothing in the browser changes.
+The box has no input fields. The payload leaves the browser with `sessionId`
+and `categoryId` empty, and `/api/create-feed` fills them in from the server's
+settings — the session token from `SESSION_ID_EN` / `SESSION_ID_HI` /
+`SESSION_ID_BN` according to the story's `language`, and the category from
+`FEED_CATEGORY_ID`. So the token is never typed in or visible in the page. A
+language with no token set returns a `500` naming the variable to add. To
+change a category, or when a token expires, update `.env` (or the platform's
+env vars) and restart — nothing in the browser changes.
 
 **Copy Feed JSON** copies the exact payload without sending it, which is the
 quickest way to check a mapping before creating anything.

@@ -307,8 +307,6 @@ copyAllBtn.addEventListener('click', () => {
 
 const createFeedBtn = document.getElementById('create-feed-btn');
 const copyFeedBtn = document.getElementById('copy-feed-json');
-const feedImageInput = document.getElementById('feed-image');
-const feedCategoryInput = document.getElementById('feed-category');
 const feedResult = document.getElementById('feed-result');
 
 // Numeric rating Hocalwire stores for the verdict. Only False → 2 is confirmed
@@ -497,7 +495,9 @@ function buildFeedPayload() {
   const lang = req.language || 'en';
   const t = FEED_TEXT[lang] || FEED_TEXT.en;
 
-  const image = (feedImageInput.value || '').trim();
+  // The Create Feed box has no inputs any more, so there is no image to attach
+  // — the key stays in the payload as an empty string, like the sample payload.
+  const image = '';
   const claim = (req.claim || '').trim();
   const source = (req.claim_source || '').trim();
   const caption = (req.caption || '').trim();
@@ -513,7 +513,9 @@ function buildFeedPayload() {
     ReviewBoximage_advanced_5: image,
     articletype: 'NEWS_ARTICLE',
     avatarId: 1,
-    categoryId: (feedCategoryInput.value || '').trim(),
+    // Empty like sessionId below: api/create-feed fills both in from the
+    // server's settings, so no configuration lives in the page.
+    categoryId: '',
     claim_fact_check: claim,
     claim_rating: ratingCode(req.verdict),
     claim_review: claim,
@@ -557,7 +559,7 @@ function buildFeedPayload() {
     reviewed_by: 'BOOM',
     seo_description: truncate(strapline, 160),
     // Left empty on purpose. The session token is a credential, so it lives in
-    // the server's environment: api/create-feed fills this key in using the
+    // the server's environment: api/create-feed picks the one matching the
     // `language` key below. Copy Feed JSON therefore shows it blank.
     sessionId: '',
     show_claim_review: true,
@@ -591,18 +593,23 @@ function showFeedResult(text, isError) {
   feedResult.classList.toggle('error', Boolean(isError));
 }
 
+// The CMS answers with the new feed's id. It has come back as {feedId: 4916}
+// so far; the other spellings are cheap to accept in case it ever differs, and
+// one level of {data: {...}} nesting is unwrapped too.
+function extractFeedId(data) {
+  if (!data || typeof data !== 'object') return '';
+  const id = data.feedId ?? data.feed_id ?? data.id;
+  if (id != null && id !== '') return String(id);
+  if (data.data && typeof data.data === 'object') return extractFeedId(data.data);
+  return '';
+}
+
 createFeedBtn.addEventListener('click', async () => {
   let payload;
   try {
     payload = buildFeedPayload();
   } catch (err) {
     showToast(err.message, true);
-    return;
-  }
-
-  if (!payload.categoryId) {
-    showToast('Category ID is required.', true);
-    feedCategoryInput.focus();
     return;
   }
 
@@ -627,8 +634,14 @@ createFeedBtn.addEventListener('click', async () => {
         data ? extractErrorMessage(data, res.status) : text.slice(0, 300)
       );
     }
-    showFeedResult(data ? JSON.stringify(data, null, 2) : text, false);
-    showToast('Feed created');
+    // One short line is all an editor needs. The raw reply is only shown when
+    // there is no id in it, so a surprise response is never swallowed.
+    const feedId = extractFeedId(data);
+    showFeedResult(
+      feedId ? `Feed created — ${feedId}` : text || 'Feed created',
+      false
+    );
+    showToast(feedId ? `Feed created — ${feedId}` : 'Feed created');
   } catch (err) {
     console.error(err);
     showFeedResult(err.message || 'Request failed', true);
