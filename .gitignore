@@ -1,0 +1,2 @@
+# Secrets — real values live here, only .env.example is committed.
+.env

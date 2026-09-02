@@ -31,6 +31,10 @@ Three tiers: a static vanilla-JS browser app → a thin Express proxy → two up
 
 **`server.js`** does two things: serve `public/` statically, and proxy two POST routes — `/api/generate` → `GENERATE_API`, and `/api/create-feed` → `CREATE_FEED_API`. Both share one `proxyJson(targetUrl, req, res)` helper that is deliberately dumb — it forwards `req.body` verbatim and mirrors the upstream status code and `Content-Type` back to the browser. It exists only to dodge CORS, so it never validates, reshapes, or knows the field schema. Upstream failures become a `502` with an `error`/`detail`/`hint` body.
 
+The one field the server does know about is `sessionId`, and only in the `/api/create-feed` route *before* it calls `proxyJson`. The token is a Hocalwire credential, so it must not sit in the page: the browser sends `sessionId: ''` plus the story's `language`, and the route stamps in `SESSION_IDS[language]` (from `SESSION_ID_EN` / `SESSION_ID_HI` / `SESSION_ID_BN`). A language with no token configured gets a `500` naming the missing variable rather than an empty token going upstream. Keep this transform in the route — `proxyJson` itself stays schema-blind.
+
+`loadEnvFile()` reads a `.env` next to `server.js` into `process.env` at startup (no `dotenv` dependency, since `node_modules/` is committed). Already-set variables win, so platform env vars beat the file, and a missing file is skipped silently — which is the normal case in Docker/Coolify. It must keep running before the `process.env` reads below it. `.env` is git-ignored; `.env.example` is the committed template.
+
 Both API defaults in `server.js` are deployed BOOM VPS URLs, not `127.0.0.1`.
 
 ## The app must keep working on two addresses
@@ -66,7 +70,7 @@ Each rendered block starts read-only with an Edit/Save toggle. Saving writes the
 
 1. `currentResponse` — the generated output, after any Edit/Save changes.
 2. `currentRequest` — the submitted form values, saved in the submit handler *only after a successful generate*, so it always describes the same story as `currentResponse`. Setting it earlier pairs new form values with the previous story when a generate fails. The payload needs the claim, source, caption and URLs, and none of those come back from `/generate`.
-3. The three inputs in the Create Feed box (`#feed-image`, `#feed-category`, `#feed-session`), which hold values that cannot be derived from any text.
+3. The two inputs in the Create Feed box (`#feed-image`, `#feed-category`), which hold values that cannot be derived from any text. `sessionId` is deliberately built as `''` and filled in by the server, so `buildFeedPayload()` never reads a token — Copy Feed JSON shows it blank on purpose.
 
 Unlike `/generate`, blanks are **not** stripped: the sample payload includes empty strings (`news_speech_file_path: ""`), so every key is always sent.
 
@@ -76,7 +80,7 @@ Two things in there are guesses that should be confirmed against the CMS: the `C
 
 ## Repo state to be aware of
 
-- `node_modules/` is committed to git and `.gitignore` is empty.
+- `node_modules/` is committed to git, and `.gitignore` holds only `.env`.
 - `escapeHtml` in `script.js` is used only by `markdownToHtml`. The renderer never touches it — it builds DOM nodes and assigns `.textContent` / `.value`, never HTML strings.
 - The `package.json` name is still `seo-optimizer`, while the repo and the folder path are `front-boom-assistant`.
 

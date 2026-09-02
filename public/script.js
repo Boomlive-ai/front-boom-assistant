@@ -309,7 +309,6 @@ const createFeedBtn = document.getElementById('create-feed-btn');
 const copyFeedBtn = document.getElementById('copy-feed-json');
 const feedImageInput = document.getElementById('feed-image');
 const feedCategoryInput = document.getElementById('feed-category');
-const feedSessionInput = document.getElementById('feed-session');
 const feedResult = document.getElementById('feed-result');
 
 // Numeric rating Hocalwire stores for the verdict. Only False → 2 is confirmed
@@ -557,7 +556,10 @@ function buildFeedPayload() {
     read_duration: `${Math.round(readSec / 60)} ${t.readUnit}`,
     reviewed_by: 'BOOM',
     seo_description: truncate(strapline, 160),
-    sessionId: (feedSessionInput.value || '').trim(),
+    // Left empty on purpose. The session token is a credential, so it lives in
+    // the server's environment: api/create-feed fills this key in using the
+    // `language` key below. Copy Feed JSON therefore shows it blank.
+    sessionId: '',
     show_claim_review: true,
     show_fast_check: true,
     state: 'SUBMITTED',
@@ -601,11 +603,6 @@ createFeedBtn.addEventListener('click', async () => {
   if (!payload.categoryId) {
     showToast('Category ID is required.', true);
     feedCategoryInput.focus();
-    return;
-  }
-  if (!payload.sessionId) {
-    showToast('Session ID is required.', true);
-    feedSessionInput.focus();
     return;
   }
 
