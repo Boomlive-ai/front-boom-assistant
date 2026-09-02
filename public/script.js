@@ -250,8 +250,6 @@ form.addEventListener('submit', async (e) => {
     article_url: (fd.get('article_url') || '').trim(),
   };
 
-  currentRequest = raw;
-
   // Drop blank fields so the backend treats them as "not provided"
   // (empty strings fail typed validators like date / url on Pydantic).
   const payload = Object.fromEntries(
@@ -277,6 +275,11 @@ form.addEventListener('submit', async (e) => {
     if (!res.ok) {
       throw new Error(extractErrorMessage(data, res.status));
     }
+    // Recorded here, not before the fetch: currentResponse only updates on
+    // success, so an early assignment would pair the NEW form values with the
+    // OLD story after a failed generate, and Create Feed would splice the two
+    // into one payload — a feed whose claim and links do not match its text.
+    currentRequest = raw;
     renderResponse(data);
     showToast('Generated successfully');
   } catch (err) {
@@ -598,6 +601,11 @@ createFeedBtn.addEventListener('click', async () => {
   if (!payload.ReviewBoximage_advanced_5) {
     showToast('Image URL is required.', true);
     feedImageInput.focus();
+    return;
+  }
+  if (!payload.categoryId) {
+    showToast('Category ID is required.', true);
+    feedCategoryInput.focus();
     return;
   }
   if (!payload.sessionId) {

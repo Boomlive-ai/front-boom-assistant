@@ -65,7 +65,7 @@ Each rendered block starts read-only with an Edit/Save toggle. Saving writes the
 `buildFeedPayload()` maps the generated story onto the ~59 keys Hocalwire's `createFeedV2` expects. It reads from three sources, so all three must be intact:
 
 1. `currentResponse` — the generated output, after any Edit/Save changes.
-2. `currentRequest` — the submitted form values, saved in the submit handler. The payload needs the claim, source, caption and URLs, and none of those come back from `/generate`.
+2. `currentRequest` — the submitted form values, saved in the submit handler *only after a successful generate*, so it always describes the same story as `currentResponse`. Setting it earlier pairs new form values with the previous story when a generate fails. The payload needs the claim, source, caption and URLs, and none of those come back from `/generate`.
 3. The three inputs in the Create Feed box (`#feed-image`, `#feed-category`, `#feed-session`), which hold values that cannot be derived from any text.
 
 Unlike `/generate`, blanks are **not** stripped: the sample payload includes empty strings (`news_speech_file_path: ""`), so every key is always sent.
