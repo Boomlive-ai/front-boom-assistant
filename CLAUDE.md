@@ -59,7 +59,7 @@ Blank values are stripped from the payload before POSTing — intentional, becau
 **Field `kind` drives serialization in both directions** via the `valueToDisplay` / `displayToValue` pair:
 
 - `text` / `single` — raw string (textarea vs. input)
-- `list` — array rendered one item per line; re-split and trimmed on save
+- `list` — array rendered as one comma-separated line; split on commas *or* newlines and trimmed on save, so a list pasted one-per-line still stores as separate items. Empty pieces are dropped, so trailing commas are harmless. The value written back to `currentResponse` stays an array, which is what Copy JSON and `buildFeedPayload()`'s `highlights` depend on
 - `json` — pretty-printed; `JSON.parse` on save, and a parse error surfaces as an error toast and aborts the save
 
 Each rendered block starts read-only with an Edit/Save toggle. Saving writes the parsed value back into the module-level `currentResponse`, which is what **Copy JSON** exports — so the export reflects editor changes, not the original API response.

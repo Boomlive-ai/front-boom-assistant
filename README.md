@@ -97,7 +97,8 @@ then open <http://localhost:3000/front-boom-assistant/>.
 Fields rendered:
 
 - `headline`, `strapline`, `body_markdown`, `slug`
-- `short_tail_keywords`, `long_tail_keywords`, `story_tags` (one per line)
+- `short_tail_keywords`, `long_tail_keywords`, `story_tags` (comma-separated;
+  when you edit them, newlines work as separators too)
 - `suggested_rating` shown as a colored pill
 - `usage` + `elapsed_seconds` shown as a footer line
 

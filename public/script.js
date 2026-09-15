@@ -43,9 +43,11 @@ const FIELDS = [
   { key: 'strapline',         label: 'Strapline',           kind: 'text',   rows: 2 },
   { key: 'body_markdown',     label: 'Body (Markdown)',     kind: 'text',   rows: 16 },
   { key: 'slug',              label: 'Slug',                kind: 'single'          },
-  { key: 'short_tail_keywords', label: 'Short-tail Keywords', kind: 'list', rows: 4 },
-  { key: 'long_tail_keywords',  label: 'Long-tail Keywords',  kind: 'list', rows: 4 },
-  { key: 'story_tags',        label: 'Story Tags',          kind: 'list',   rows: 4 },
+  // `list` shows one comma-separated line, so these need less height than the
+  // four rows they had when each item sat on its own line.
+  { key: 'short_tail_keywords', label: 'Short-tail Keywords', kind: 'list', rows: 2 },
+  { key: 'long_tail_keywords',  label: 'Long-tail Keywords',  kind: 'list', rows: 3 },
+  { key: 'story_tags',        label: 'Story Tags',          kind: 'list',   rows: 2 },
 ];
 
 // Latest response, kept in-memory so "Copy JSON" reflects edits.
@@ -73,7 +75,7 @@ function setLoading(loading) {
 // Serialise / parse per field kind.
 function valueToDisplay(kind, value) {
   if (value === null || value === undefined) return '';
-  if (kind === 'list' && Array.isArray(value)) return value.join('\n');
+  if (kind === 'list' && Array.isArray(value)) return value.join(', ');
   if (kind === 'json') return JSON.stringify(value, null, 2);
   if (typeof value === 'object') return JSON.stringify(value, null, 2);
   return String(value);
@@ -81,8 +83,10 @@ function valueToDisplay(kind, value) {
 
 function displayToValue(kind, str) {
   if (kind === 'list') {
+    // Commas are what the boxes show, but newlines count as separators too, so
+    // a list pasted one-per-line still saves as separate items.
     return str
-      .split('\n')
+      .split(/[,\n]+/)
       .map((s) => s.trim())
       .filter(Boolean);
   }
