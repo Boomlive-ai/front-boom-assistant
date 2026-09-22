@@ -85,7 +85,9 @@ On success the box shows one line — `✅ Feed created successfully! (ID: <id>)
 
 `originalArticleId()` prefers `original_article_id` / `source_article_id` / `article_id` from the response, then falls back to the trailing number of `article_url` (BOOM URLs end in the story id). When neither exists the ID row is omitted entirely rather than rendered empty — `article_url` is an optional form field, so this is the normal case for an unpublished story.
 
-Two things in there are guesses that should be confirmed against the CMS: the `CLAIM_RATING` map (only `False → 2` is confirmed from the sample payload), and the per-language constants in `FEED_TEXT`. `slug`, `long_tail_keywords` and `story_tags` are generated but have no matching key in the payload, so they are dropped.
+Two things in there are guesses that should be confirmed against the CMS: the `CLAIM_RATING` map (only `False → 2` is confirmed from the sample payload), and the per-language constants in `FEED_TEXT`. `slug` is generated but has no matching key in the payload, so it is dropped.
+
+`keywords` (short- + long-tail merged) and `tags` (story tags) are the two payload keys the CMS wants as a single **comma-separated string**, not an array — `"Bihar bridge, bridge collapse"` and `"Bihar,Misinformation"`. Keywords are spaced after the comma and tags are not, copying the sample payload. `cleanList()` still returns an array (it trims, drops blanks and de-duplicates across the lists it merges); the `.join()` happens at the payload key. `highlights` is the exception that stays an array.
 
 `markdownToHtml` exists because the CMS stores `story` as HTML while the model returns Markdown. It escapes text first, so no raw HTML from the model can reach the payload.
 

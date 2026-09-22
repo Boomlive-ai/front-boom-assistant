@@ -648,10 +648,11 @@ function buildFeedPayload() {
       : [],
     highlights_heading: t.highlightsHeading,
     // SEO keywords (short- + long-tail) and story tags, mapped from the generated
-    // output. Sent as arrays like `highlights`; if the CMS wants comma-separated
-    // strings instead, wrap each in .join(', ').
-    keywords: cleanList(res.short_tail_keywords, res.long_tail_keywords),
-    tags: cleanList(res.story_tags),
+    // output. The CMS wants one comma-separated string each, not an array --
+    // keywords are spaced after the comma, tags are not, matching the sample
+    // payload (`"Bihar bridge, bridge collapse"` / `"Bihar,Misinformation"`).
+    keywords: cleanList(res.short_tail_keywords, res.long_tail_keywords).join(', '),
+    tags: cleanList(res.story_tags).join(','),
     interview_ans: [t.interviewAns],
     interview_check: true,
     interview_ques: [t.interviewQues],
