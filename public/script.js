@@ -180,20 +180,20 @@ function renderResponse(data) {
   renderTranslationInfo(data);
 
   // Usage
-  if (data.usage) {
-    const u = data.usage;
-    const parts = [];
-    if (u.input_tokens != null) parts.push(`input ${u.input_tokens}`);
-    if (u.output_tokens != null) parts.push(`output ${u.output_tokens}`);
-    if (u.judge_input_tokens != null) parts.push(`judge in ${u.judge_input_tokens}`);
-    if (u.judge_output_tokens != null) parts.push(`judge out ${u.judge_output_tokens}`);
-    const elapsed = data.elapsed_seconds
-      ? ` · ${Number(data.elapsed_seconds).toFixed(2)}s`
-      : '';
-    usageLine.textContent = `Tokens — ${parts.join(', ')}${elapsed}`;
-  } else {
-    usageLine.textContent = '';
-  }
+  // if (data.usage) {
+  //   const u = data.usage;
+  //   const parts = [];
+  //   if (u.input_tokens != null) parts.push(`input ${u.input_tokens}`);
+  //   if (u.output_tokens != null) parts.push(`output ${u.output_tokens}`);
+  //   if (u.judge_input_tokens != null) parts.push(`judge in ${u.judge_input_tokens}`);
+  //   if (u.judge_output_tokens != null) parts.push(`judge out ${u.judge_output_tokens}`);
+  //   const elapsed = data.elapsed_seconds
+  //     ? ` · ${Number(data.elapsed_seconds).toFixed(2)}s`
+  //     : '';
+  //   usageLine.textContent = `Tokens — ${parts.join(', ')}${elapsed}`;
+  // } else {
+  //   usageLine.textContent = '';
+  // }
 
   // Scroll to it
   responseCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -572,6 +572,25 @@ function ratingCode(verdict) {
   return CLAIM_RATING[key] != null ? CLAIM_RATING[key] : 2;
 }
 
+// Normalise list-type model output into clean strings: trim, drop blanks, and
+// de-duplicate while preserving order. Accepts several lists and merges them —
+// used to build `keywords` (short- + long-tail) and `tags` (story tags).
+function cleanList(...lists) {
+  const seen = new Set();
+  const out = [];
+  for (const list of lists) {
+    if (!Array.isArray(list)) continue;
+    for (const item of list) {
+      const v = String(item || '').trim();
+      if (v && !seen.has(v)) {
+        seen.add(v);
+        out.push(v);
+      }
+    }
+  }
+  return out;
+}
+
 // ---------- build the payload ----------
 // Every key below is one createFeedV2 expects. Values come from three places:
 // the generated response, the form the user filled in, and the three inputs
@@ -628,6 +647,11 @@ function buildFeedPayload() {
       ? res.short_tail_keywords
       : [],
     highlights_heading: t.highlightsHeading,
+    // SEO keywords (short- + long-tail) and story tags, mapped from the generated
+    // output. Sent as arrays like `highlights`; if the CMS wants comma-separated
+    // strings instead, wrap each in .join(', ').
+    keywords: cleanList(res.short_tail_keywords, res.long_tail_keywords),
+    tags: cleanList(res.story_tags),
     interview_ans: [t.interviewAns],
     interview_check: true,
     interview_ques: [t.interviewQues],
