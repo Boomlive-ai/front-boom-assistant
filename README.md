@@ -26,6 +26,7 @@ Open <http://localhost:3000>.
 | `PORT`           | `3000`                                | Port the web UI runs on                  |
 | `GENERATE_API`   | the deployed BOOM VPS `/generate` URL | Upstream FastAPI endpoint                |
 | `CREATE_FEED_API`| the Hocalwire `createFeedV2` URL      | Upstream endpoint for **Create Feed**    |
+| `REPORT_API`     | `http://127.0.0.1:8000/boom-research/report` | Upstream endpoint for the **Monthly Report** page (local until the VPS has the route) |
 | `BASE_PATH`      | `/front-boom-assistant`               | Extra folder path to also serve under    |
 | `SESSION_ID_EN`  | _(none)_                              | Hocalwire session token for English stories |
 | `SESSION_ID_HI`  | _(none)_                              | Hocalwire session token for Hindi stories   |
@@ -65,7 +66,8 @@ The app answers on **both** of these at the same time:
 Two things make this work, and both must be kept:
 
 1. **Internal links in `public/` never start with `/`.** They are written as
-   `style.css`, `script.js`, `api/generate` and `api/create-feed`. A leading
+   `style.css`, `script.js`, `api/generate`, `api/create-feed`, `report.html`,
+   `report.css`, `report.js`, `api/report` and `./`. A leading
    slash means "go back
    to the top of the website", which on the toolbox host lands on the PHP app.
    Adding a `/` in front of any of these silently breaks the folder address.
@@ -166,6 +168,30 @@ confirming against the CMS:
 `slug`, `long_tail_keywords` and `story_tags` are generated but have no matching
 key in the feed payload, so they are not sent.
 
+## Monthly Report
+
+The **📊 Monthly Report** button in the top bar opens `report.html`, which turns
+BOOM's coded fact-check sheet into the monthly misinformation report, laid out
+like the PDF draft.
+
+1. Pick the Excel sheet (`.xlsx`), the month, and — if you want — tick
+   **Write the text with AI** (slower; otherwise the text comes from templates).
+2. Click **Generate Report**. The page POSTs the file to `api/report`, which
+   `server.js` forwards to `REPORT_API` (the FastAPI `/boom-research/report`
+   route) unchanged.
+3. The report appears below: headline, stat cards, key highlights, charts
+   (months, languages, topics, a day-by-day dot timeline, targets, AI, medium /
+   intent / type), the media-misreporting table, theme assessment, data notes
+   and an appendix of every fact-check.
+
+The **Other months** buttons above the report re-run it for another month with
+the same file. **Print / Save as PDF** opens the browser's print dialog with
+only the report on the page; in Chrome, choose "Save as PDF" and the pages get
+numbers and a month footer like the PDF draft.
+
+`REPORT_API` points at `127.0.0.1:8000` by default, because the deployed
+service has no report route yet. Set it on the server when it does.
+
 ## Files
 
 ```
@@ -174,7 +200,10 @@ front-boom-assistant/
 ├── server.js            # Express + proxy, mounted at / and BASE_PATH
 ├── public/
 │   ├── index.html       # Form + response layout, trailing-slash guard
-│   ├── style.css        # BOOM-style styling
-│   └── script.js        # Fetch + editable rendering
+│   ├── style.css        # BOOM-style styling (shared by both pages)
+│   ├── script.js        # Fetch + editable rendering
+│   ├── report.html      # Monthly Report page
+│   ├── report.css       # Report layout, charts, print styles
+│   └── report.js        # Upload + report rendering
 └── README.md
 ```

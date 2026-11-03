@@ -53,6 +53,11 @@ const GENERATE_API =
 const CREATE_FEED_API =
   process.env.CREATE_FEED_API ||
   'https://microservices.coolify.vps.boomlive.in/api/hocalwire/createFeedV2';
+// The Monthly Report page. Unlike the two above, this defaults to the local
+// FastAPI service: the deployed VPS has no /boom-research/report route yet, so
+// set REPORT_API on the server once it does.
+const REPORT_API =
+  process.env.REPORT_API || 'http://127.0.0.1:8000/boom-research/report';
 
 // Hocalwire session token, one per story language. The editor used to type
 // this into the page; now the browser only sends the language and the token is
@@ -94,15 +99,23 @@ router.use(express.static(path.join(__dirname, 'public')));
 // Every proxy here is the same dumb pipe: forward req.body verbatim, mirror the
 // upstream status code and Content-Type back to the browser. It exists only to
 // dodge CORS, so it never validates or reshapes the field schema.
-async function proxyJson(targetUrl, req, res) {
+function proxyJson(targetUrl, req, res) {
+  return forward(targetUrl, res, 'application/json', JSON.stringify(req.body));
+}
+
+// Same pipe for a file upload. express.raw() below keeps the multipart body as
+// raw bytes, and the browser's Content-Type header (which carries the boundary
+// that separates the parts) goes along with it, so nothing is unpacked here.
+function proxyUpload(targetUrl, req, res) {
+  return forward(targetUrl, res, req.headers['content-type'], req.body);
+}
+
+async function forward(targetUrl, res, contentType, body) {
   try {
     const upstream = await fetch(targetUrl, {
       method: 'POST',
-      headers: {
-        accept: 'application/json',
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify(req.body),
+      headers: { accept: 'application/json', 'Content-Type': contentType },
+      body,
     });
 
     const text = await upstream.text();
@@ -155,6 +168,25 @@ router.post('/api/create-feed', (req, res) => {
   return proxyJson(CREATE_FEED_API, req, res);
 });
 
+// Proxy endpoint — forwards the Monthly Report form (the Excel file, month and
+// narrative switch) to the FastAPI /boom-research/report route. The global
+// express.json() above ignores multipart bodies, so this route reads its own.
+router.post(
+  '/api/report',
+  express.raw({ type: 'multipart/form-data', limit: '25mb' }),
+  (req, res) => {
+    if (!Buffer.isBuffer(req.body)) {
+      return res.status(400).json({
+        error: 'Expected a multipart/form-data upload with an Excel file.',
+      });
+    }
+    console.log(
+      `📊 Report request → ${REPORT_API} (${Math.round(req.body.length / 1024)} KB)`
+    );
+    return proxyUpload(REPORT_API, req, res);
+  }
+);
+
 router.get('/health', (_req, res) => res.json({ ok: true }));
 
 // Specific path first, then the root. Express strips the mount path from
@@ -172,6 +204,7 @@ app.listen(PORT, () => {
   }
   console.log(`Proxying /api/generate    → ${GENERATE_API}`);
   console.log(`Proxying /api/create-feed → ${CREATE_FEED_API}`);
+  console.log(`Proxying /api/report      → ${REPORT_API}`);
   console.log(`Feed category ID          → ${FEED_CATEGORY_ID}`);
   // Names only, never the tokens themselves — this line ends up in server logs.
   const withToken = Object.keys(SESSION_IDS).filter((l) => SESSION_IDS[l]);

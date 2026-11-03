@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BOOM Monthly Report</title>
+
+    <!-- Relative on purpose, like index.html — see README "Two addresses".
+         No trailing-slash guard is needed here: report.html is a file name,
+         so relative links already resolve inside the right folder. -->
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="report.css" />
+    <!-- Filled in by report.js with the month, for the printed page footer. -->
+    <style id="print-footer"></style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-text">BOOM</span>
+      </div>
+      <nav class="topbar-nav">
+        <!-- "./" is this app's own front page, at either address. -->
+        <a href="./" class="nav-btn">← Boom AI Assistant</a>
+        <!-- Absolute on purpose, same as on index.html. -->
+        <a href="https://toolbox.boomlive.in/">Home</a>
+      </nav>
+    </header>
+
+    <main class="page">
+      <section class="card no-print">
+        <h1 class="page-title">Monthly Report</h1>
+
+        <form id="report-form" class="seo-form" novalidate>
+          <fieldset class="field">
+            <legend>Fact-check sheet <span class="hint">(.xlsx)</span></legend>
+            <input
+              type="file"
+              name="file"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            />
+          </fieldset>
+
+          <div class="two-col">
+            <fieldset class="field">
+              <legend>Month</legend>
+              <!-- The pattern and placeholder only matter in browsers that
+                   show this as a plain text box (older Firefox, Safari). -->
+              <input
+                type="month"
+                name="month"
+                pattern="\d{4}-\d{2}"
+                placeholder="YYYY-MM"
+              />
+            </fieldset>
+
+            <fieldset class="field">
+              <legend>Text</legend>
+              <label class="check-row">
+                <input type="checkbox" name="narrative" />
+                Write the text with AI <span class="hint">(slower)</span>
+              </label>
+            </fieldset>
+          </div>
+
+          <div class="actions">
+            <button type="submit" id="report-btn" class="btn primary">
+              <span class="btn-label">Generate Report</span>
+              <span class="spinner" aria-hidden="true"></span>
+            </button>
+            <button type="reset" class="btn ghost">Reset</button>
+          </div>
+        </form>
+
+        <div id="report-error" class="rp-error" hidden></div>
+      </section>
+
+      <!-- Shown once a report is on the page. -->
+      <div id="report-tools" class="rp-tools no-print" hidden>
+        <div id="month-switch" class="rp-month-switch"></div>
+        <div class="rp-tools-actions">
+          <button type="button" id="copy-json" class="btn ghost small">Copy JSON</button>
+          <button type="button" id="print-btn" class="btn primary small">Print / Save as PDF</button>
+        </div>
+      </div>
+
+      <!-- Drawn by renderReport() in report.js from the api/report reply. -->
+      <article id="report" class="card report" hidden></article>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <!-- Absolute like the Home link above. -->
+    <footer class="sitefoot">
+      <nav class="sitefoot-links">
+        <a href="https://toolbox.boomlive.in/privacy.php">Privacy Policy</a>
+        <a href="https://toolbox.boomlive.in/data-deletion.php">Data Deletion</a>
+      </nav>
+    </footer>
+
+    <script src="report.js"></script>
+  </body>
+</html>

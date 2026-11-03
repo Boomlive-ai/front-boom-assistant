@@ -27,9 +27,11 @@ Requires Node 18+ — `server.js` uses global `fetch` with no polyfill.
 
 ## Architecture
 
-Three tiers: a static vanilla-JS browser app → a thin Express proxy → two upstream services (the FastAPI `/generate` service, and the Hocalwire `createFeedV2` endpoint).
+Three tiers: a static vanilla-JS browser app (two pages) → a thin Express proxy → three upstream services (the FastAPI `/generate` and `/boom-research/report` routes, and the Hocalwire `createFeedV2` endpoint).
 
-**`server.js`** does two things: serve `public/` statically, and proxy two POST routes — `/api/generate` → `GENERATE_API`, and `/api/create-feed` → `CREATE_FEED_API`. Both share one `proxyJson(targetUrl, req, res)` helper that is deliberately dumb — it forwards `req.body` verbatim and mirrors the upstream status code and `Content-Type` back to the browser. It exists only to dodge CORS, so it never validates, reshapes, or knows the field schema. Upstream failures become a `502` with an `error`/`detail`/`hint` body.
+**`server.js`** does two things: serve `public/` statically, and proxy three POST routes — `/api/generate` → `GENERATE_API`, `/api/create-feed` → `CREATE_FEED_API`, and `/api/report` → `REPORT_API`. The first two use `proxyJson(targetUrl, req, res)`, the third `proxyUpload`; both hand off to one `forward()` that is deliberately dumb — it sends the body verbatim and mirrors the upstream status code and `Content-Type` back to the browser. It exists only to dodge CORS, so it never validates, reshapes, or knows the field schema. Upstream failures become a `502` with an `error`/`detail`/`hint` body.
+
+`/api/report` is a multipart file upload. The app-wide `express.json()` skips multipart bodies, so the route runs its own `express.raw({ type: 'multipart/form-data', limit: '25mb' })` and `proxyUpload` forwards the raw bytes with the browser's own `Content-Type` header — that header carries the boundary between the parts, so it must be passed on unchanged and the body never unpacked. A request that is not multipart gets a `400`.
 
 The only fields the server knows about are `sessionId` and `categoryId`, and only in the `/api/create-feed` route *before* it calls `proxyJson`. The token is a Hocalwire credential, so it must not sit in the page: the browser sends both keys empty plus the story's `language`, and the route stamps in `SESSION_IDS[language]` (from `SESSION_ID_EN` / `SESSION_ID_HI` / `SESSION_ID_BN`) and `FEED_CATEGORY_ID` (default `796`). A language with no token configured gets a `500` naming the missing variable rather than an empty token going upstream. Keep this transform in the route — `proxyJson` itself stays schema-blind.
 
@@ -37,14 +39,14 @@ Both sides log a create-feed attempt, since neither knows the whole picture: the
 
 `loadEnvFile()` reads a `.env` next to `server.js` into `process.env` at startup (no `dotenv` dependency, since `node_modules/` is committed). Already-set variables win, so platform env vars beat the file, and a missing file is skipped silently — which is the normal case in Docker/Coolify. It must keep running before the `process.env` reads below it. `.env` is git-ignored; `.env.example` is the committed template.
 
-Both API defaults in `server.js` are deployed BOOM VPS URLs, not `127.0.0.1`.
+`GENERATE_API` and `CREATE_FEED_API` default to deployed BOOM VPS URLs. `REPORT_API` is the exception: it defaults to `http://127.0.0.1:8000/boom-research/report`, because the VPS has no report route yet (it answers `404`). Set `REPORT_API` on Coolify once it does.
 
 ## The app must keep working on two addresses
 
 It is served both at a root URL (Coolify) and at a folder path on a host whose root belongs to a **different** app (`https://toolbox.boomlive.in/front-boom-assistant/`). Two mechanisms keep that true, and both are easy to break:
 
-- **Never write a leading `/` on an internal link in `public/`.** They are relative on purpose — `style.css`, `script.js`, `api/generate`, `api/create-feed`. A leading slash resolves against the host root, which on the toolbox host is the unrelated PHP app. `style.css` contains no `url()` or `@import`, so those four are the complete set.
-- **Links that leave this app stay absolute**, and are not covered by the rule above: `GENERATE_API` and `CREATE_FEED_API` in `server.js`, plus the header Home link and the footer Privacy Policy / Data Deletion links, which point at `https://toolbox.boomlive.in/…`. Those pages belong to the PHP app, so they must resolve to the toolbox host even when this app is served from the Coolify address. Making them relative would break them there.
+- **Never write a leading `/` on an internal link in `public/`.** They are relative on purpose — `style.css`, `script.js`, `api/generate`, `api/create-feed`, and for the report page `report.html`, `report.css`, `report.js`, `api/report` and the `./` back link. A leading slash resolves against the host root, which on the toolbox host is the unrelated PHP app. Neither stylesheet contains `url()` or `@import`, so that is the complete set.
+- **Links that leave this app stay absolute**, and are not covered by the rule above: `GENERATE_API`, `CREATE_FEED_API` and `REPORT_API` in `server.js`, plus the header Home link and the footer Privacy Policy / Data Deletion links, which point at `https://toolbox.boomlive.in/…`. Those pages belong to the PHP app, so they must resolve to the toolbox host even when this app is served from the Coolify address. Making them relative would break them there.
 - **The handlers live on an `express.Router()` mounted twice** — at `BASE_PATH` (default `/front-boom-assistant`) and at `/` — so the app works whether or not the reverse proxy strips the folder. Adding a route with `app.get`/`app.post` instead of `router.get`/`router.post` makes it reachable at the root only. The root mount is also what keeps `/health` available to the Docker `HEALTHCHECK`, which calls `127.0.0.1` directly.
 
 Relative links depend on a trailing slash. Two independent guards supply it: Express 301-redirects `/front-boom-assistant` → `/front-boom-assistant/` when it sees the prefix, and an inline script at the top of `index.html` covers the case where the proxy has already stripped it. That script cannot move into `script.js` — it exists precisely because `script.js` fails to load in that situation.
@@ -90,6 +92,16 @@ Two things in there are guesses that should be confirmed against the CMS: the `C
 `keywords` (short- + long-tail merged) and `tags` (story tags) are the two payload keys the CMS wants as a single **comma-separated string**, not an array — `"Bihar bridge, bridge collapse"` and `"Bihar,Misinformation"`. Keywords are spaced after the comma and tags are not, copying the sample payload. `cleanList()` still returns an array (it trims, drops blanks and de-duplicates across the lists it merges); the `.join()` happens at the payload key. `highlights` is the exception that stays an array.
 
 `markdownToHtml` exists because the CMS stores `story` as HTML while the model returns Markdown. It escapes text first, so no raw HTML from the model can reach the payload.
+
+## Monthly Report page
+
+`public/report.html` + `report.css` + `report.js`, reached from the **📊 Monthly Report** `.nav-btn` in the main page's top bar (and back via `./`). It has no trailing-slash guard: `report.html` is a file name, so relative links already resolve inside the folder. `report.js` shares no code with `script.js` — `showToast` and `extractErrorMessage` are copies — because `script.js` binds to the main page's elements at load.
+
+The form sends `file`, `month` (`YYYY-MM`) and `narrative` to `api/report`. The `FormData` is rebuilt by hand so the checkbox always arrives as `"true"`/`"false"` (an unticked box would otherwise be missing), and no `Content-Type` header is set, so the browser adds the boundary. When the month has no data the API answers `{detail: {message, available_months}}`, and the error box turns `available_months` into buttons; after a successful report the same `monthButtons()` fills the "Other months" bar from `monthly`. Both re-submit with the file still in the form.
+
+`renderReport()` rebuilds `#report` from the reply in the order of the PDF draft (`BOOM_Monthly_Report_January_2026.pdf`): masthead, headline + standfirst, four stat cards, key highlights, then sections built from `monthly`, `language`, `topics`, `themes` (dot timeline and theme assessment), `targets`, `ai`, `media_misreporting`, `breakdowns`, `data_notes` / `flags` and the `fact_checks` appendix. Every node comes from `el()`, which adds strings as text, and `link()` only makes `http(s)` URLs clickable — so nothing from the sheet is ever HTML. Section text comes only from `narrative`; chart titles are computed (ties are named together by `leaders()`). Months with `partial: true` are left out of the monthly columns, and the first stat card falls back to the busiest day when `summary.previous_month` is `null`.
+
+Charts are plain HTML/CSS, no library. Series colours are the classes `rp-c0`…`rp-c3` (the PDF's blue, orange, green, amber — green and amber darkened to pass a colour-blind check), always in that order, and `foldOther()` merges anything past the fourth into a grey "Other". Every stacked bar has a text legend. **Print / Save as PDF** is `window.print()`: the `@media print` block hides everything but the report and forces background colours (the bars are backgrounds), and the `@page` margin boxes print page numbers plus a month footer that `report.js` writes into `<style id="print-footer">` (Chrome only; other browsers skip the margins).
 
 ## Repo state to be aware of
 

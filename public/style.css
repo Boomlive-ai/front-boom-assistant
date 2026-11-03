@@ -41,6 +41,19 @@ a {
   font-size: 15px;
   color: #333;
 }
+/* A link dressed as a button — the jump between the two pages. */
+.nav-btn {
+  border: 1px solid #ee3124;
+  color: #ee3124;
+  border-radius: 4px;
+  padding: 6px 14px;
+  font-weight: 600;
+  transition: background 0.15s, color 0.15s;
+}
+.nav-btn:hover {
+  background: #ee3124;
+  color: #fff;
+}
 
 /* ---------- page + cards ---------- */
 .page {
