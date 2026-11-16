@@ -90,7 +90,7 @@ async function loadMonths(keep) {
     placeholder.value = '';
     placeholder.defaultSelected = true;
     const group = el('optgroup');
-    group.label = 'In the database';
+    // group.label = 'In the database';
     [...savedMonths.values()]
       .sort((a, b) => b.month.localeCompare(a.month))
       .forEach((m) => {
@@ -161,7 +161,7 @@ function syncMonthUi() {
   const saved = savedMonths.get(choice);
   if (saved) {
     const label = saved.label || monthLabel(saved.month);
-    setNote(sheetStatus, `Not needed: ${label} is already in the database.`);
+    // setNote(sheetStatus, `Not needed: ${label} is already in the database.`);
   } else if (isOther) {
     setNote(
       sheetStatus,
