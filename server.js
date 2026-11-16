@@ -58,6 +58,12 @@ const CREATE_FEED_API =
 // set REPORT_API on the server once it does.
 const REPORT_API =
   process.env.REPORT_API || 'http://127.0.0.1:8000/boom-research/report';
+// The months saved in the research database, for the report page's month
+// dropdown. The FastAPI service reads them from Postgres, so this app never
+// holds the database login. Defaults to the /months route next to REPORT_API,
+// so setting REPORT_API alone moves both.
+const REPORT_MONTHS_API =
+  process.env.REPORT_MONTHS_API || REPORT_API.replace(/\/report\/?$/, '/months');
 
 // Hocalwire session token, one per story language. The editor used to type
 // this into the page; now the browser only sends the language and the token is
@@ -110,13 +116,16 @@ function proxyUpload(targetUrl, req, res) {
   return forward(targetUrl, res, req.headers['content-type'], req.body);
 }
 
-async function forward(targetUrl, res, contentType, body) {
+// Same pipe for a plain GET: nothing is sent, the reply comes back as it is.
+function proxyGet(targetUrl, res) {
+  return forward(targetUrl, res, null, undefined, 'GET');
+}
+
+async function forward(targetUrl, res, contentType, body, method = 'POST') {
   try {
-    const upstream = await fetch(targetUrl, {
-      method: 'POST',
-      headers: { accept: 'application/json', 'Content-Type': contentType },
-      body,
-    });
+    const headers = { accept: 'application/json' };
+    if (contentType) headers['Content-Type'] = contentType;
+    const upstream = await fetch(targetUrl, { method, headers, body });
 
     const text = await upstream.text();
     res.status(upstream.status);
@@ -168,16 +177,22 @@ router.post('/api/create-feed', (req, res) => {
   return proxyJson(CREATE_FEED_API, req, res);
 });
 
-// Proxy endpoint — forwards the Monthly Report form (the Excel file, month and
-// narrative switch) to the FastAPI /boom-research/report route. The global
-// express.json() above ignores multipart bodies, so this route reads its own.
+// Proxy endpoint — the months saved in the research database, which fill the
+// report page's month dropdown. Read-only; nothing is sent upstream.
+router.get('/api/report/months', (_req, res) => proxyGet(REPORT_MONTHS_API, res));
+
+// Proxy endpoint — forwards the Monthly Report form (month, narrative switch
+// and, for a month not in the database yet, the Excel file) to the FastAPI
+// /boom-research/report route. With no file the report is built from the
+// database. The global express.json() above ignores multipart bodies, so this
+// route reads its own.
 router.post(
   '/api/report',
   express.raw({ type: 'multipart/form-data', limit: '25mb' }),
   (req, res) => {
     if (!Buffer.isBuffer(req.body)) {
       return res.status(400).json({
-        error: 'Expected a multipart/form-data upload with an Excel file.',
+        error: 'Expected a multipart/form-data form (month, narrative and maybe an Excel file).',
       });
     }
     console.log(
@@ -205,6 +220,7 @@ app.listen(PORT, () => {
   console.log(`Proxying /api/generate    → ${GENERATE_API}`);
   console.log(`Proxying /api/create-feed → ${CREATE_FEED_API}`);
   console.log(`Proxying /api/report      → ${REPORT_API}`);
+  console.log(`Proxying /api/report/months → ${REPORT_MONTHS_API}`);
   console.log(`Feed category ID          → ${FEED_CATEGORY_ID}`);
   // Names only, never the tokens themselves — this line ends up in server logs.
   const withToken = Object.keys(SESSION_IDS).filter((l) => SESSION_IDS[l]);

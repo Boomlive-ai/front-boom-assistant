@@ -41,6 +41,87 @@ body {
   accent-color: #2b6cff;
 }
 
+/* Month dropdown. style.css turns the browser's own arrow off for every
+   select, so a small chevron is drawn here — with borders, not an image, so
+   this file still has no url(). */
+.rp-select-wrap {
+  position: relative;
+}
+.rp-select-wrap::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  border-right: 2px solid #666;
+  border-bottom: 2px solid #666;
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+.seo-form .rp-select-wrap select {
+  padding-right: 26px;
+  text-overflow: ellipsis;
+}
+.seo-form .rp-select-wrap select:disabled {
+  color: #999;
+  cursor: progress;
+}
+
+/* "Which month?" box, shown only for "Another month". */
+.rp-other-month {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #e0e0e0;
+  font-size: 14px;
+  color: #444;
+}
+.rp-other-month[hidden] {
+  display: none;
+}
+.rp-other-month label {
+  white-space: nowrap;
+}
+.seo-form .rp-other-month input[type='month'] {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Small grey line under a field; red when something went wrong. */
+.rp-field-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #777;
+}
+.rp-field-note:empty {
+  display: none;
+}
+.rp-field-note.is-error {
+  color: #b71c1c;
+}
+.rp-link-btn {
+  font: inherit;
+  padding: 0;
+  border: none;
+  background: none;
+  color: #2b6cff;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* The sheet upload, while the month is already in the database. */
+.seo-form .field:disabled {
+  background: #fafafa;
+}
+.seo-form .field:disabled input[type='file'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .rp-error {
   margin-top: 18px;
   padding: 12px 14px;

@@ -1,7 +1,15 @@
-// report.js — Monthly Report page. Uploads the fact-check sheet to api/report
-// and draws the reply in the layout of BOOM's monthly report PDF.
+// report.js — Monthly Report page. The editor picks a month first: months
+// saved in the research database are reported on straight away, and any other
+// month needs the fact-check sheet uploaded. The reply from api/report is drawn
+// in the layout of BOOM's monthly report PDF.
 
 const form = document.getElementById('report-form');
+const monthSelect = document.getElementById('month-select');
+const otherMonthRow = document.getElementById('other-month-row');
+const otherMonth = document.getElementById('other-month');
+const monthStatus = document.getElementById('month-status');
+const sheetField = document.getElementById('sheet-field');
+const sheetStatus = document.getElementById('sheet-status');
 const reportBtn = document.getElementById('report-btn');
 const reportError = document.getElementById('report-error');
 const reportTools = document.getElementById('report-tools');
@@ -14,6 +22,14 @@ const toast = document.getElementById('toast');
 
 // Latest reply, kept so Copy JSON can export it.
 let currentReport = null;
+
+// Months saved in the database, "2026-01" → {month, label, fact_checks}.
+// Filled by loadMonths(); empty when the list could not be loaded.
+let savedMonths = new Map();
+
+// Value of the dropdown's "Another month" option. Not a YYYY-MM, so it can
+// never be mistaken for a real month.
+const OTHER = 'other';
 
 // ---------- utilities ----------
 function showToast(msg, isError = false) {
@@ -76,6 +92,17 @@ function shortDate(iso) {
 // "January 2026" → "January".
 const monthName = (label) => String(label || '').split(' ')[0];
 
+// "2026-01" → "January 2026". Built in UTC, like shortDate().
+function monthLabel(month) {
+  const [y, m] = String(month || '').split('-').map(Number);
+  if (!y || !m) return String(month || '');
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+}
+
 // ["a", "b", "c"] → "a, b and c".
 function joinAnd(list) {
   const items = list.filter(Boolean);
@@ -125,9 +152,159 @@ function extractErrorMessage(data, status) {
   return String(raw);
 }
 
+// ---------- month dropdown ----------
+
+function setNote(node, text, isError = false) {
+  node.replaceChildren(...[].concat(text).filter(Boolean));
+  node.classList.toggle('is-error', isError);
+}
+
+// Asks the server which months the database has and rebuilds the dropdown:
+// those months newest first, then "Another month". `keep` is the month to
+// leave selected afterwards (after an upload, the month just reported on).
+async function loadMonths(keep) {
+  monthSelect.disabled = true;
+  monthSelect.replaceChildren(el('option', null, 'Loading months…'));
+  monthSelect.options[0].value = '';
+  setNote(monthStatus, '');
+
+  let months = [];
+  let failure = '';
+  try {
+    // Relative on purpose — see README "Two addresses".
+    const res = await fetch('api/report/months', {
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error('Server returned non-JSON: ' + text.slice(0, 200));
+    }
+    if (!res.ok) throw new Error(extractErrorMessage(data, res.status));
+    months = Array.isArray(data) ? data : data.months || [];
+  } catch (err) {
+    console.error('Could not load the saved months:', err);
+    failure = err.message || 'Request failed';
+  }
+
+  savedMonths = new Map(
+    months.filter((m) => m && /^\d{4}-\d{2}$/.test(m.month)).map((m) => [m.month, m])
+  );
+
+  const other = el('option', null, 'Another month (upload the sheet)…');
+  other.value = OTHER;
+
+  if (savedMonths.size) {
+    const placeholder = el('option', null, 'Choose a month…');
+    placeholder.value = '';
+    placeholder.defaultSelected = true;
+    const group = el('optgroup');
+    group.label = 'In the database';
+    [...savedMonths.values()]
+      .sort((a, b) => b.month.localeCompare(a.month))
+      .forEach((m) => {
+        const opt = el(
+          'option',
+          null,
+          `${m.label || monthLabel(m.month)} · ${m.fact_checks ?? '?'} fact-checks`
+        );
+        opt.value = m.month;
+        group.append(opt);
+      });
+    const otherGroup = el('optgroup', null, other);
+    otherGroup.label = 'Not in the database';
+    monthSelect.replaceChildren(placeholder, group, otherGroup);
+  } else {
+    // Nothing to pick from, so "Another month" is the only choice — and the
+    // one Reset goes back to.
+    other.defaultSelected = true;
+    monthSelect.replaceChildren(other);
+  }
+  monthSelect.disabled = false;
+
+  if (failure) {
+    const retry = el('button', 'rp-link-btn', 'Try again');
+    retry.type = 'button';
+    retry.addEventListener('click', () => loadMonths(keep));
+    setNote(
+      monthStatus,
+      [`Could not load the months from the database (${failure}). You can still upload a sheet. `, retry],
+      true
+    );
+  } else if (!savedMonths.size) {
+    setNote(monthStatus, 'The database has no months yet. Upload a sheet to add some.');
+  }
+
+  if (keep) chooseMonth(keep);
+  else syncMonthUi();
+}
+
+// Picks `month` in the form: from the dropdown when the database has it,
+// otherwise as "Another month" with the month filled in.
+function chooseMonth(month) {
+  if (savedMonths.has(month)) {
+    monthSelect.value = month;
+  } else {
+    monthSelect.value = OTHER;
+    otherMonth.value = month;
+  }
+  syncMonthUi();
+}
+
+// The month the form will report on, and whether the database has it.
+function selectedMonth() {
+  const choice = monthSelect.value;
+  if (savedMonths.has(choice)) return { month: choice, fromDb: true };
+  if (choice === OTHER) return { month: otherMonth.value.trim(), fromDb: false };
+  return { month: '', fromDb: false };
+}
+
+// Shows the month box for "Another month", and switches the sheet upload on
+// only when it is needed: a month the database does not have.
+function syncMonthUi() {
+  const choice = monthSelect.value;
+  const isOther = choice === OTHER;
+  otherMonthRow.hidden = !isOther;
+  sheetField.disabled = !isOther;
+
+  const saved = savedMonths.get(choice);
+  if (saved) {
+    const label = saved.label || monthLabel(saved.month);
+    setNote(sheetStatus, `Not needed: ${label} is already in the database.`);
+  } else if (isOther) {
+    setNote(
+      sheetStatus,
+      'Needed: choose the sheet that has this month. It is saved to the database, so next time you can pick the month from the list.'
+    );
+  } else {
+    setNote(sheetStatus, 'Choose a month first.');
+  }
+}
+
+// An old error is about the month that was picked before, so it goes.
+monthSelect.addEventListener('change', () => {
+  reportError.hidden = true;
+  syncMonthUi();
+  if (monthSelect.value === OTHER) otherMonth.focus();
+});
+
+// Typed a month the database already has? Pick it from the list instead, so no
+// upload is asked for.
+otherMonth.addEventListener('change', () => {
+  reportError.hidden = true;
+  const month = otherMonth.value;
+  if (!savedMonths.has(month)) return;
+  chooseMonth(month);
+  showToast(`${monthLabel(month)} is already in the database — no upload needed`);
+});
+
 // ---------- month buttons ----------
-// One button per month the sheet covers. Clicking one re-runs the report for
-// that month with the file that is still selected in the form.
+// One button per month the report covers. Clicking one re-runs the report for
+// that month: from the database when it has the month, otherwise with the
+// file that is still selected in the form.
 function monthButtons(months, current) {
   const row = el('div', 'rp-month-row');
   months.forEach((m) => {
@@ -139,7 +316,7 @@ function monthButtons(months, current) {
       btn.classList.add('is-current');
     }
     btn.addEventListener('click', () => {
-      form.elements.month.value = m.month;
+      chooseMonth(m.month);
       form.requestSubmit();
     });
     row.append(btn);
@@ -151,7 +328,7 @@ function showError(message, months) {
   reportError.replaceChildren(el('p', null, message));
   if (Array.isArray(months) && months.length) {
     reportError.append(
-      el('p', 'rp-error-hint', 'Months in this sheet:'),
+      el('p', 'rp-error-hint', 'Months that have data:'),
       monthButtons(months, '')
     );
   }
@@ -685,25 +862,34 @@ function renderReport(data) {
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
-  const fd = new FormData(form);
-  const file = fd.get('file');
-  const month = String(fd.get('month') || '').trim();
+  const { month, fromDb } = selectedMonth();
+  const file = form.elements.file.files[0];
 
-  if (!file || !file.name) {
-    showError('Choose the Excel sheet first.');
+  if (!month) {
+    showError(
+      monthSelect.value === OTHER
+        ? 'Pick the month to report on in the "Which month?" box.'
+        : 'Choose a month first.'
+    );
     return;
   }
   if (!/^\d{4}-\d{2}$/.test(month)) {
     showError('Pick the month to report on (YYYY-MM, for example 2026-01).');
     return;
   }
+  if (!fromDb && !file) {
+    showError(`${monthLabel(month)} is not in the database yet, so choose the Excel sheet that has it.`);
+    return;
+  }
 
   // Built by hand rather than sending the form as it is: an unticked checkbox
-  // would be missing entirely, and the API wants "true" or "false".
+  // would be missing entirely, and the API wants "true" or "false". The file
+  // goes only for a month the database lacks — without one, the API builds the
+  // report from the database.
   const body = new FormData();
-  body.append('file', file);
+  if (!fromDb) body.append('file', file);
   body.append('month', month);
-  body.append('narrative', fd.get('narrative') ? 'true' : 'false');
+  body.append('narrative', form.elements.narrative.checked ? 'true' : 'false');
 
   reportError.hidden = true;
   setLoading(true);
@@ -731,6 +917,9 @@ form.addEventListener('submit', async (e) => {
     }
     renderReport(data);
     showToast('Report ready');
+    // The API saves an uploaded sheet to the database, so its months belong
+    // in the dropdown now; the month just reported on stays picked.
+    if (!fromDb) loadMonths((data.meta && data.meta.month) || month);
   } catch (err) {
     console.error(err);
     showError(err.message || 'Request failed', err.months);
@@ -742,7 +931,11 @@ form.addEventListener('submit', async (e) => {
 
 form.addEventListener('reset', () => {
   reportError.hidden = true;
+  // The reset event fires before the fields are cleared, so wait a tick.
+  setTimeout(syncMonthUi);
 });
+
+loadMonths();
 
 copyJsonBtn.addEventListener('click', () => {
   if (!currentReport) return;

@@ -31,26 +31,32 @@
         <h1 class="page-title">Monthly Report</h1>
 
         <form id="report-form" class="seo-form" novalidate>
-          <fieldset class="field">
-            <legend>Fact-check sheet <span class="hint">(.xlsx)</span></legend>
-            <input
-              type="file"
-              name="file"
-              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
-            />
-          </fieldset>
-
           <div class="two-col">
             <fieldset class="field">
               <legend>Month</legend>
-              <!-- The pattern and placeholder only matter in browsers that
-                   show this as a plain text box (older Firefox, Safari). -->
-              <input
-                type="month"
-                name="month"
-                pattern="\d{4}-\d{2}"
-                placeholder="YYYY-MM"
-              />
+              <!-- Filled by report.js from api/report/months: one option per
+                   month saved in the database, plus "Another month". -->
+              <div class="rp-select-wrap">
+                <select name="month" id="month-select" aria-describedby="month-status" disabled>
+                  <option value="">Loading months…</option>
+                </select>
+              </div>
+
+              <!-- Only for "Another month": a month the database does not have. -->
+              <div id="other-month-row" class="rp-other-month" hidden>
+                <label for="other-month">Which month?</label>
+                <!-- The pattern and placeholder only matter in browsers that
+                     show this as a plain text box (older Firefox, Safari). -->
+                <input
+                  type="month"
+                  id="other-month"
+                  name="other_month"
+                  pattern="\d{4}-\d{2}"
+                  placeholder="YYYY-MM"
+                />
+              </div>
+
+              <p id="month-status" class="rp-field-note" aria-live="polite"></p>
             </fieldset>
 
             <fieldset class="field">
@@ -61,6 +67,18 @@
               </label>
             </fieldset>
           </div>
+
+          <!-- Switched on only when the month is not in the database. -->
+          <fieldset id="sheet-field" class="field" disabled>
+            <legend>Fact-check sheet <span class="hint">(.xlsx)</span></legend>
+            <input
+              type="file"
+              name="file"
+              aria-describedby="sheet-status"
+              accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+            />
+            <p id="sheet-status" class="rp-field-note">Choose a month first.</p>
+          </fieldset>
 
           <div class="actions">
             <button type="submit" id="report-btn" class="btn primary">

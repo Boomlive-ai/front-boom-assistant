@@ -27,6 +27,7 @@ Open <http://localhost:3000>.
 | `GENERATE_API`   | the deployed BOOM VPS `/generate` URL | Upstream FastAPI endpoint                |
 | `CREATE_FEED_API`| the Hocalwire `createFeedV2` URL      | Upstream endpoint for **Create Feed**    |
 | `REPORT_API`     | `http://127.0.0.1:8000/boom-research/report` | Upstream endpoint for the **Monthly Report** page (local until the VPS has the route) |
+| `REPORT_MONTHS_API` | `REPORT_API` with `/report` → `/months` | Months saved in the research database, for the report page's month dropdown |
 | `BASE_PATH`      | `/front-boom-assistant`               | Extra folder path to also serve under    |
 | `SESSION_ID_EN`  | _(none)_                              | Hocalwire session token for English stories |
 | `SESSION_ID_HI`  | _(none)_                              | Hocalwire session token for Hindi stories   |
@@ -67,7 +68,7 @@ Two things make this work, and both must be kept:
 
 1. **Internal links in `public/` never start with `/`.** They are written as
    `style.css`, `script.js`, `api/generate`, `api/create-feed`, `report.html`,
-   `report.css`, `report.js`, `api/report` and `./`. A leading
+   `report.css`, `report.js`, `api/report`, `api/report/months` and `./`. A leading
    slash means "go back
    to the top of the website", which on the toolbox host lands on the PHP app.
    Adding a `/` in front of any of these silently breaks the folder address.
@@ -171,26 +172,42 @@ key in the feed payload, so they are not sent.
 ## Monthly Report
 
 The **📊 Monthly Report** button in the top bar opens `report.html`, which turns
-BOOM's coded fact-check sheet into the monthly misinformation report, laid out
+BOOM's coded fact-check data into the monthly misinformation report, laid out
 like the PDF draft.
 
-1. Pick the Excel sheet (`.xlsx`), the month, and — if you want — tick
-   **Write the text with AI** (slower; otherwise the text comes from templates).
-2. Click **Generate Report**. The page POSTs the file to `api/report`, which
-   `server.js` forwards to `REPORT_API` (the FastAPI `/boom-research/report`
-   route) unchanged.
-3. The report appears below: headline, stat cards, key highlights, charts
+1. Pick the **Month** first. The dropdown lists every month saved in the
+   research database (`boom_report`), newest first, with its fact-check count.
+   The list comes from `api/report/months`, which `server.js` forwards to
+   `REPORT_MONTHS_API` (the FastAPI `/boom-research/months` route).
+   - A month from the list needs no file: the sheet upload stays switched off
+     and the report is built from the database.
+   - For a month that is not there, choose **Another month (upload the
+     sheet)…**, type the month, and choose the Excel sheet (`.xlsx`) that has
+     it. The API saves the sheet to the database, so afterwards its months
+     appear in the list.
+2. If you want, tick **Write the text with AI** (slower; otherwise the text
+   comes from templates).
+3. Click **Generate Report**. The page POSTs the month (and the file, when
+   there is one) to `api/report`, which `server.js` forwards to `REPORT_API`
+   (the FastAPI `/boom-research/report` route) unchanged.
+4. The report appears below: headline, stat cards, key highlights, charts
    (months, languages, topics, a day-by-day dot timeline, targets, AI, medium /
    intent / type), the media-misreporting table, theme assessment, data notes
    and an appendix of every fact-check.
 
-The **Other months** buttons above the report re-run it for another month with
-the same file. **Print / Save as PDF** opens the browser's print dialog with
+The **Other months** buttons above the report re-run it for another month —
+from the database when it has that month, otherwise with the file still in the
+form. **Print / Save as PDF** opens the browser's print dialog with
 only the report on the page; in Chrome, choose "Save as PDF" and the pages get
 numbers and a month footer like the PDF draft.
 
 `REPORT_API` points at `127.0.0.1:8000` by default, because the deployed
-service has no report route yet. Set it on the server when it does.
+service has no report route yet. Set it on the server when it does —
+`REPORT_MONTHS_API` follows it on its own.
+
+This app never connects to Postgres. The database login (`DB_HOST`,
+`DB_PASSWORD`, `RESEARCH_DB_NAME`, …) lives only in the FastAPI service's own
+`.env`, so it never appears in this app, its logs or the page.
 
 ## Files
 
@@ -204,6 +221,6 @@ front-boom-assistant/
 │   ├── script.js        # Fetch + editable rendering
 │   ├── report.html      # Monthly Report page
 │   ├── report.css       # Report layout, charts, print styles
-│   └── report.js        # Upload + report rendering
+│   └── report.js        # Month dropdown, upload, report rendering
 └── README.md
 ```
