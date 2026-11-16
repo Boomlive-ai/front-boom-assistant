@@ -22,7 +22,6 @@ const reportLayout = document.getElementById('report-layout');
 const topicNav = document.getElementById('topic-nav');
 const report = document.getElementById('report');
 const copyJsonBtn = document.getElementById('copy-json');
-const printBtn = document.getElementById('print-btn');
 
 // Latest reply, kept so Copy JSON can export it.
 let currentReport = null;
@@ -538,8 +537,8 @@ function renderReport(data) {
     footnote(meta, data.narrative_source, label)
   );
 
-  // The page title becomes the file name in "Save as PDF", and Chrome prints
-  // the footer below in the margin of every page, like the PDF draft.
+  // There is no print button, but if someone prints anyway (Ctrl+P), the page
+  // title becomes the file name and Chrome prints this footer on every page.
   document.title = `BOOM Monthly Report ${label}`;
   setPrintFooter(`BOOM Monthly Report · ${label} · Draft`);
 
@@ -650,5 +649,3 @@ copyJsonBtn.addEventListener('click', () => {
     () => showToast('Copy failed', true)
   );
 });
-
-printBtn.addEventListener('click', () => window.print());

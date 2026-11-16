@@ -198,9 +198,9 @@ like the PDF draft.
 
 The **Other months** buttons above the report re-run it for another month —
 from the database when it has that month, otherwise with the file still in the
-form. **Print / Save as PDF** opens the browser's print dialog with
-only the report on the page; in Chrome, choose "Save as PDF" and the pages get
-numbers and a month footer like the PDF draft.
+form. **Copy JSON** copies the whole report reply. There is no print / PDF
+button; if you print with the browser (Ctrl+P) anyway, only the report is
+printed.
 
 ### Topic reports
 
@@ -218,8 +218,8 @@ narrow the list. Clicking a topic opens its own report in a new tab
 
 The topic page asks for the month from the database again (without AI text,
 so it takes under a second) and keeps only that topic's fact-checks. It has
-the same sidebar, so you can jump between topics, a link back to the month
-report, and its own **Print / Save as PDF**.
+the same sidebar, so you can jump between topics, and a link back to the month
+report.
 
 `REPORT_API` points at `127.0.0.1:8000` by default, because the deployed
 service has no report route yet. Set it on the server when it does —

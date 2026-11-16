@@ -15,7 +15,6 @@ const topicNav = document.getElementById('topic-nav');
 const tools = document.getElementById('topic-tools');
 const monthLink = document.getElementById('month-link');
 const report = document.getElementById('report');
-const printBtn = document.getElementById('print-btn');
 
 const params = new URLSearchParams(location.search);
 const month = (params.get('month') || '').trim();
@@ -215,7 +214,7 @@ function renderTopic(data) {
   );
   report.hidden = false;
 
-  // The page title becomes the file name in "Save as PDF".
+  // The page title is also the file name if someone prints the page (Ctrl+P).
   document.title = `BOOM Topic Report ${topic} ${label}`;
   setPrintFooter(`BOOM Topic Report · ${topic} · ${label} · Draft`);
 }
@@ -268,7 +267,5 @@ async function loadTopic() {
     );
   }
 }
-
-printBtn.addEventListener('click', () => window.print());
 
 loadTopic();
