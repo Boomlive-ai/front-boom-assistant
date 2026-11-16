@@ -33,42 +33,32 @@
         <h1 class="page-title">Monthly Report</h1>
 
         <form id="report-form" class="seo-form" novalidate>
-          <div class="two-col">
-            <fieldset class="field">
-              <legend>Month</legend>
-              <!-- Filled by report.js from api/report/months: one option per
-                   month saved in the database, plus "Another month". -->
-              <div class="rp-select-wrap">
-                <select name="month" id="month-select" aria-describedby="month-status" disabled>
-                  <option value="">Loading months…</option>
-                </select>
-              </div>
+          <fieldset class="field">
+            <legend>Month</legend>
+            <!-- Filled by report.js from api/report/months: one option per
+                 month saved in the database, plus "Another month". -->
+            <div class="rp-select-wrap">
+              <select name="month" id="month-select" aria-describedby="month-status" disabled>
+                <option value="">Loading months…</option>
+              </select>
+            </div>
 
-              <!-- Only for "Another month": a month the database does not have. -->
-              <div id="other-month-row" class="rp-other-month" hidden>
-                <label for="other-month">Which month?</label>
-                <!-- The pattern and placeholder only matter in browsers that
-                     show this as a plain text box (older Firefox, Safari). -->
-                <input
-                  type="month"
-                  id="other-month"
-                  name="other_month"
-                  pattern="\d{4}-\d{2}"
-                  placeholder="YYYY-MM"
-                />
-              </div>
+            <!-- Only for "Another month": a month the database does not have. -->
+            <div id="other-month-row" class="rp-other-month" hidden>
+              <label for="other-month">Which month?</label>
+              <!-- The pattern and placeholder only matter in browsers that
+                   show this as a plain text box (older Firefox, Safari). -->
+              <input
+                type="month"
+                id="other-month"
+                name="other_month"
+                pattern="\d{4}-\d{2}"
+                placeholder="YYYY-MM"
+              />
+            </div>
 
-              <p id="month-status" class="rp-field-note" aria-live="polite"></p>
-            </fieldset>
-
-            <fieldset class="field">
-              <legend>Text</legend>
-              <label class="check-row">
-                <input type="checkbox" name="narrative" />
-                Write the text with AI <span class="hint">(slower)</span>
-              </label>
-            </fieldset>
-          </div>
+            <p id="month-status" class="rp-field-note" aria-live="polite"></p>
+          </fieldset>
 
           <!-- Switched on only when the month is not in the database. -->
           <fieldset id="sheet-field" class="field" disabled>
@@ -105,9 +95,6 @@
           <!-- Shown once a report is on the page. -->
           <div id="report-tools" class="rp-tools no-print" hidden>
             <div id="month-switch" class="rp-month-switch"></div>
-            <div class="rp-tools-actions">
-              <button type="button" id="copy-json" class="btn ghost small">Copy JSON</button>
-            </div>
           </div>
 
           <!-- Drawn by renderReport() in report.js from the api/report reply. -->

@@ -21,10 +21,6 @@ const monthSwitch = document.getElementById('month-switch');
 const reportLayout = document.getElementById('report-layout');
 const topicNav = document.getElementById('topic-nav');
 const report = document.getElementById('report');
-const copyJsonBtn = document.getElementById('copy-json');
-
-// Latest reply, kept so Copy JSON can export it.
-let currentReport = null;
 
 // Months saved in the database, "2026-01" → {month, label, fact_checks}.
 // Filled by loadMonths(); empty when the list could not be loaded.
@@ -38,8 +34,9 @@ const OTHER = 'other';
 function setLoading(loading) {
   reportBtn.disabled = loading;
   reportBtn.classList.toggle('loading', loading);
+  // The text is always written by AI, which takes a while, so say so.
   reportBtn.querySelector('.btn-label').textContent = loading
-    ? 'Generating…'
+    ? 'Writing the report with AI…'
     : 'Generate Report';
 }
 
@@ -490,7 +487,6 @@ function appendix(factChecks, label) {
 
 // ---------- render the whole report ----------
 function renderReport(data) {
-  currentReport = data;
   const meta = data.meta || {};
   const n = data.narrative || {};
   const s = data.summary || {};
@@ -578,14 +574,15 @@ form.addEventListener('submit', async (e) => {
     return;
   }
 
-  // Built by hand rather than sending the form as it is: an unticked checkbox
-  // would be missing entirely, and the API wants "true" or "false". The file
-  // goes only for a month the database lacks — without one, the API builds the
-  // report from the database.
+  // Built by hand rather than sending the form as it is. The file goes only
+  // for a month the database lacks — without one, the API builds the report
+  // from the database. narrative is always "true": the report text is always
+  // written by AI (the API falls back to template text only if that fails,
+  // and then says so in `flags`).
   const body = new FormData();
   if (!fromDb) body.append('file', file);
   body.append('month', month);
-  body.append('narrative', form.elements.narrative.checked ? 'true' : 'false');
+  body.append('narrative', 'true');
 
   reportError.hidden = true;
   setLoading(true);
@@ -640,12 +637,4 @@ loadMonths().then(() => {
     chooseMonth(startMonth);
     form.requestSubmit();
   }
-});
-
-copyJsonBtn.addEventListener('click', () => {
-  if (!currentReport) return;
-  navigator.clipboard.writeText(JSON.stringify(currentReport, null, 2)).then(
-    () => showToast('Report copied as JSON'),
-    () => showToast('Copy failed', true)
-  );
 });

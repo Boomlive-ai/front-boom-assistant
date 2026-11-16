@@ -181,7 +181,7 @@ router.post('/api/create-feed', (req, res) => {
 // report page's month dropdown. Read-only; nothing is sent upstream.
 router.get('/api/report/months', (_req, res) => proxyGet(REPORT_MONTHS_API, res));
 
-// Proxy endpoint — forwards the Monthly Report form (month, narrative switch
+// Proxy endpoint — forwards the Monthly Report form (month, the narrative flag
 // and, for a month not in the database yet, the Excel file) to the FastAPI
 // /boom-research/report route. With no file the report is built from the
 // database. The global express.json() above ignores multipart bodies, so this

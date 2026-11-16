@@ -95,7 +95,7 @@ then open <http://localhost:3000/front-boom-assistant/>.
 2. `server.js` forwards the JSON body to `GENERATE_API` (avoids CORS pain).
 3. The upstream JSON response is rendered as a set of editable blocks.
 4. Each block starts read-only; click **Edit** to modify, **Save** to lock
-   it back in. Edits are stored in-memory, so **Copy JSON** exports the
+   it back in. Edits are stored in-memory, so **Create Feed** sends the
    edited version.
 
 Fields rendered:
@@ -186,21 +186,22 @@ like the PDF draft.
      sheet)…**, type the month, and choose the Excel sheet (`.xlsx`) that has
      it. The API saves the sheet to the database, so afterwards its months
      appear in the list.
-2. If you want, tick **Write the text with AI** (slower; otherwise the text
-   comes from templates).
-3. Click **Generate Report**. The page POSTs the month (and the file, when
+2. Click **Generate Report**. The page POSTs the month (and the file, when
    there is one) to `api/report`, which `server.js` forwards to `REPORT_API`
    (the FastAPI `/boom-research/report` route) unchanged.
-4. The report appears below: headline, stat cards, key highlights, charts
+   The report text is **always written by AI** — there is no on/off switch —
+   so while it works the button reads "Writing the report with AI…" (about
+   15 seconds for January 2026). If the AI fails, the API falls back to
+   template text and says so in the data notes.
+3. The report appears below: headline, stat cards, key highlights, charts
    (months, languages, topics, a day-by-day dot timeline, targets, AI, medium /
    intent / type), the media-misreporting table, theme assessment, data notes
    and an appendix of every fact-check.
 
 The **Other months** buttons above the report re-run it for another month —
 from the database when it has that month, otherwise with the file still in the
-form. **Copy JSON** copies the whole report reply. There is no print / PDF
-button; if you print with the browser (Ctrl+P) anyway, only the report is
-printed.
+form. There is no Copy JSON or print / PDF button; if you print with the
+browser (Ctrl+P) anyway, only the report is printed.
 
 ### Topic reports
 

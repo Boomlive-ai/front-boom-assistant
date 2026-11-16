@@ -29,17 +29,6 @@ body {
 .seo-form input[type='file'] {
   cursor: pointer;
 }
-.check-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-top: 4px;
-  font-size: 15px;
-  cursor: pointer;
-}
-.check-row input {
-  accent-color: #2b6cff;
-}
 
 /* Month dropdown. style.css turns the browser's own arrow off for every
    select, so a small chevron is drawn here — with borders, not an image, so
@@ -169,10 +158,6 @@ body {
   border-color: #1a1a1a;
   color: #fff;
   cursor: default;
-}
-.rp-tools-actions {
-  display: flex;
-  gap: 8px;
 }
 
 /* ---------- the report "paper" ---------- */

@@ -6,7 +6,6 @@ const responseCard = document.getElementById('response-card');
 const fieldsContainer = document.getElementById('fields-container');
 const ratingPill = document.getElementById('rating-pill');
 const usageLine = document.getElementById('usage-line');
-const copyAllBtn = document.getElementById('copy-all');
 const translationInfo = document.getElementById('translation-info');
 const toast = document.getElementById('toast');
 
@@ -50,7 +49,8 @@ const FIELDS = [
   { key: 'story_tags',        label: 'Story Tags',          kind: 'list',   rows: 2 },
 ];
 
-// Latest response, kept in-memory so "Copy JSON" reflects edits.
+// Latest response, kept in-memory with the editor's Edit/Save changes, so
+// Create Feed sends the edited story.
 let currentResponse = null;
 // Latest submitted form values, kept so Create Feed can reuse the claim,
 // source, caption and URLs the user typed — the generated output has none.
@@ -380,16 +380,6 @@ form.addEventListener('submit', async (e) => {
   }
 });
 
-// ---------- copy full JSON ----------
-copyAllBtn.addEventListener('click', () => {
-  if (!currentResponse) return;
-  navigator.clipboard
-    .writeText(JSON.stringify(currentResponse, null, 2))
-    .then(
-      () => showToast('Full response copied as JSON'),
-      () => showToast('Copy failed', true)
-    );
-});
 /* ==========================================================================
    Create Feed — builds the Hocalwire payload from the generated output and
    POSTs it through the api/create-feed proxy.
