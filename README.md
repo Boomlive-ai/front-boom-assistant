@@ -198,9 +198,10 @@ like the PDF draft.
    intent / type), the media-misreporting table, theme assessment, data notes
    and an appendix of every fact-check.
 
-The **Other months** buttons above the report re-run it for another month —
-from the database when it has that month, otherwise with the file still in the
-form. There is no Copy JSON or print / PDF button; if you print with the
+A report starts **only when you click Generate Report** — never by itself.
+The **Other months** buttons above the report just pick that month in the form
+(and bring you back to the button); the topic page's "← January 2026 report"
+link does the same. Then click **Generate Report**. There is no Copy JSON or print / PDF button; if you print with the
 browser (Ctrl+P) anyway, only the report is printed.
 
 ### Topic reports

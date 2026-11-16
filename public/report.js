@@ -190,9 +190,22 @@ otherMonth.addEventListener('change', () => {
 });
 
 // ---------- month buttons ----------
-// One button per month the report covers. Clicking one re-runs the report for
-// that month: from the database when it has the month, otherwise with the
-// file that is still selected in the form.
+
+// Picks a month for the next report WITHOUT starting it: a report starts only
+// when the editor clicks Generate Report (each one is an AI call). The form
+// scrolls into view with the button focused, so it is one click away.
+function pickMonthForNextReport(month) {
+  chooseMonth(month);
+  reportError.hidden = true;
+  form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  reportBtn.focus({ preventScroll: true });
+  showToast(`${monthLabel(month)} picked — click Generate Report`);
+}
+
+// One button per month the report covers. Clicking one only picks that month
+// in the form (see pickMonthForNextReport); the report itself waits for
+// Generate Report — from the database when it has the month, otherwise with
+// the file that is still selected in the form.
 function monthButtons(months, current) {
   const row = el('div', 'rp-month-row');
   months.forEach((m) => {
@@ -203,10 +216,7 @@ function monthButtons(months, current) {
       btn.disabled = true;
       btn.classList.add('is-current');
     }
-    btn.addEventListener('click', () => {
-      chooseMonth(m.month);
-      form.requestSubmit();
-    });
+    btn.addEventListener('click', () => pickMonthForNextReport(m.month));
     row.append(btn);
   });
   return row;
@@ -628,13 +638,10 @@ form.addEventListener('reset', () => {
   setTimeout(syncMonthUi);
 });
 
-// report.html?month=2026-01 (the link back from a topic page) opens that
-// month's report straight away, when the database has it. Otherwise the form
-// simply waits, as usual.
+// report.html?month=2026-01 (the link back from a topic page) picks that month
+// in the dropdown, when the database has it — but does not start the report.
+// Nothing here ever submits by itself: only Generate Report does.
 const startMonth = new URLSearchParams(location.search).get('month');
 loadMonths().then(() => {
-  if (startMonth && savedMonths.has(startMonth)) {
-    chooseMonth(startMonth);
-    form.requestSubmit();
-  }
+  if (startMonth && savedMonths.has(startMonth)) chooseMonth(startMonth);
 });
