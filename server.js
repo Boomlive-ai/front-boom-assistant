@@ -47,38 +47,64 @@ loadEnvFile(path.join(__dirname, '.env'));
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const GENERATE_API =
-  process.env.GENERATE_API ||
-  'https://boom-assistant.vps.boomlive.in/generate';
-const CREATE_FEED_API =
-  process.env.CREATE_FEED_API ||
-  'https://microservices.coolify.vps.boomlive.in/api/hocalwire/createFeedV2';
-// The Monthly Report page. Unlike the two above, this defaults to the local
-// FastAPI service: the deployed VPS has no /boom-research/report route yet, so
-// set REPORT_API on the server once it does.
-const REPORT_API =
-  process.env.REPORT_API || 'http://127.0.0.1:8000/boom-research/report';
+
+// ---------------------------------------------------------------------------
+// Settings. Every address, token and ID comes from .env (or, on the servers,
+// the platform's environment variables) — none is written in this file. A
+// missing one is listed when the server starts, and the route that needs it
+// answers 500 naming it (see needSetting below), rather than quietly using an
+// old value. .env.example lists every name.
+// ---------------------------------------------------------------------------
+
+// One setting; blank counts as missing.
+const setting = (name) => (process.env[name] || '').trim();
+
+// The FastAPI /generate route.
+const GENERATE_API = setting('GENERATE_API');
+// Hocalwire createFeedV2.
+const CREATE_FEED_API = setting('CREATE_FEED_API');
+// The Monthly Report page: the FastAPI /boom-research/report route.
+const REPORT_API = setting('REPORT_API');
 // The months saved in the research database, for the report page's month
 // dropdown. The FastAPI service reads them from Postgres, so this app never
-// holds the database login. Defaults to the /months route next to REPORT_API,
-// so setting REPORT_API alone moves both.
+// holds the database login. When it is not set, it is the /months route next
+// to REPORT_API, so setting REPORT_API alone moves both.
 const REPORT_MONTHS_API =
-  process.env.REPORT_MONTHS_API || REPORT_API.replace(/\/report\/?$/, '/months');
+  setting('REPORT_MONTHS_API') || REPORT_API.replace(/\/report\/?$/, '/months');
 
 // Hocalwire session token, one per story language. The editor used to type
 // this into the page; now the browser only sends the language and the token is
 // filled in here (see /api/create-feed below). Keeping it server-side means the
 // token never appears in the page source, where anyone could copy it.
 const SESSION_IDS = {
-  en: process.env.SESSION_ID_EN || '',
-  hi: process.env.SESSION_ID_HI || '',
-  bn: process.env.SESSION_ID_BN || '',
+  en: setting('SESSION_ID_EN'),
+  hi: setting('SESSION_ID_HI'),
+  bn: setting('SESSION_ID_BN'),
 };
 
-// Hocalwire section the feed is filed under. It was a text box in the page that
-// nobody ever changed from 796, so it is a setting now — same place as the
-// tokens above, changed without touching the code.
-const FEED_CATEGORY_ID = process.env.FEED_CATEGORY_ID || '796';
+// Hocalwire section the feed is filed under (796 so far). It was a text box in
+// the page that nobody ever changed, so it is a setting, like the tokens.
+const FEED_CATEGORY_ID = setting('FEED_CATEGORY_ID');
+
+// The settings each route cannot work without (the session tokens are checked
+// per language in /api/create-feed).
+const REQUIRED = {
+  GENERATE_API,
+  CREATE_FEED_API,
+  FEED_CATEGORY_ID,
+  REPORT_API,
+};
+
+// Answers 500 naming the setting when it is empty, and returns false; the
+// route then stops. Only the name is sent — never a value.
+function needSetting(res, name, value) {
+  if (value) return true;
+  res.status(500).json({
+    error: `${name} is not set.`,
+    hint: `Add ${name} to .env (or to the server's environment variables) and restart the server.`,
+  });
+  return false;
+}
 
 // Enough of a token to tell one from another in the log, never enough to reuse.
 // Server logs are kept by the host (Coolify keeps them for anyone with access),
@@ -145,13 +171,18 @@ async function forward(targetUrl, res, contentType, body, method = 'POST') {
 }
 
 // Proxy endpoint — forwards the JSON body to the FastAPI /generate route.
-router.post('/api/generate', (req, res) => proxyJson(GENERATE_API, req, res));
+router.post('/api/generate', (req, res) => {
+  if (!needSetting(res, 'GENERATE_API', GENERATE_API)) return;
+  return proxyJson(GENERATE_API, req, res);
+});
 
 // Proxy endpoint — forwards the built feed payload to Hocalwire createFeedV2.
 // The single exception to the dumb-pipe rule above: the two settings values.
 // The browser sends sessionId and categoryId empty and they are stamped in
 // here, so no token and no configuration has to live in the page.
 router.post('/api/create-feed', (req, res) => {
+  if (!needSetting(res, 'CREATE_FEED_API', CREATE_FEED_API)) return;
+  if (!needSetting(res, 'FEED_CATEGORY_ID', FEED_CATEGORY_ID)) return;
   const lang = String((req.body && req.body.language) || '').toLowerCase();
   const sessionId = SESSION_IDS[lang];
 
@@ -179,7 +210,10 @@ router.post('/api/create-feed', (req, res) => {
 
 // Proxy endpoint — the months saved in the research database, which fill the
 // report page's month dropdown. Read-only; nothing is sent upstream.
-router.get('/api/report/months', (_req, res) => proxyGet(REPORT_MONTHS_API, res));
+router.get('/api/report/months', (_req, res) => {
+  if (!needSetting(res, 'REPORT_MONTHS_API (or REPORT_API)', REPORT_MONTHS_API)) return;
+  return proxyGet(REPORT_MONTHS_API, res);
+});
 
 // Proxy endpoint — forwards the Monthly Report form (month, the narrative flag
 // and, for a month not in the database yet, the Excel file) to the FastAPI
@@ -190,6 +224,7 @@ router.post(
   '/api/report',
   express.raw({ type: 'multipart/form-data', limit: '25mb' }),
   (req, res) => {
+    if (!needSetting(res, 'REPORT_API', REPORT_API)) return;
     if (!Buffer.isBuffer(req.body)) {
       return res.status(400).json({
         error: 'Expected a multipart/form-data form (month, narrative and maybe an Excel file).',
@@ -217,11 +252,18 @@ app.listen(PORT, () => {
   if (BASE_PATH) {
     console.log(`Also serving under http://localhost:${PORT}${BASE_PATH}/`);
   }
-  console.log(`Proxying /api/generate    → ${GENERATE_API}`);
-  console.log(`Proxying /api/create-feed → ${CREATE_FEED_API}`);
-  console.log(`Proxying /api/report      → ${REPORT_API}`);
-  console.log(`Proxying /api/report/months → ${REPORT_MONTHS_API}`);
-  console.log(`Feed category ID          → ${FEED_CATEGORY_ID}`);
+  const shown = (value) => value || '(not set)';
+  console.log(`Proxying /api/generate    → ${shown(GENERATE_API)}`);
+  console.log(`Proxying /api/create-feed → ${shown(CREATE_FEED_API)}`);
+  console.log(`Proxying /api/report      → ${shown(REPORT_API)}`);
+  console.log(`Proxying /api/report/months → ${shown(REPORT_MONTHS_API)}`);
+  console.log(`Feed category ID          → ${shown(FEED_CATEGORY_ID)}`);
+  const missing = Object.keys(REQUIRED).filter((name) => !REQUIRED[name]);
+  if (missing.length) {
+    console.warn(
+      `⚠️  Missing settings: ${missing.join(', ')}. Add them to .env (see .env.example) and restart — the pages that need them will show an error until then.`
+    );
+  }
   // Names only, never the tokens themselves — this line ends up in server logs.
   const withToken = Object.keys(SESSION_IDS).filter((l) => SESSION_IDS[l]);
   console.log(

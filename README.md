@@ -21,18 +21,25 @@ Open <http://localhost:3000>.
 
 ## Environment variables
 
-| Var           | Default                                | Purpose                                  |
+No address, token or ID is written in the code — every one comes from these
+variables, so the required ones must be set (in `.env`, or on the server).
+
+| Var           | Required? / default                    | Purpose                                  |
 |---------------|----------------------------------------|------------------------------------------|
-| `PORT`           | `3000`                                | Port the web UI runs on                  |
-| `GENERATE_API`   | the deployed BOOM VPS `/generate` URL | Upstream FastAPI endpoint                |
-| `CREATE_FEED_API`| the Hocalwire `createFeedV2` URL      | Upstream endpoint for **Create Feed**    |
-| `REPORT_API`     | `http://127.0.0.1:8000/boom-research/report` | Upstream endpoint for the **Monthly Report** page (local until the VPS has the route) |
+| `GENERATE_API`   | **required**                          | Upstream FastAPI `/generate` endpoint (main page) |
+| `CREATE_FEED_API`| **required**                          | Hocalwire `createFeedV2` endpoint for **Create Feed** |
+| `FEED_CATEGORY_ID`| **required**                         | Hocalwire section new feeds are filed under (`796`) |
+| `SESSION_ID_EN`  | **required** for English feeds        | Hocalwire session token for English stories |
+| `SESSION_ID_HI`  | **required** for Hindi feeds          | Hocalwire session token for Hindi stories   |
+| `SESSION_ID_BN`  | **required** for Bangla feeds         | Hocalwire session token for Bangla stories  |
+| `REPORT_API`     | **required**                          | Upstream endpoint for the **Monthly Report** page (`http://127.0.0.1:8000/boom-research/report` until the VPS has the route) |
 | `REPORT_MONTHS_API` | `REPORT_API` with `/report` → `/months` | Months saved in the research database, for the report page's month dropdown |
+| `PORT`           | `3000`                                | Port the web UI runs on                  |
 | `BASE_PATH`      | `/front-boom-assistant`               | Extra folder path to also serve under    |
-| `SESSION_ID_EN`  | _(none)_                              | Hocalwire session token for English stories |
-| `SESSION_ID_HI`  | _(none)_                              | Hocalwire session token for Hindi stories   |
-| `SESSION_ID_BN`  | _(none)_                              | Hocalwire session token for Bangla stories  |
-| `FEED_CATEGORY_ID`| `796`                                | Hocalwire section new feeds are filed under |
+
+`.env.example` has the current value of each one. When a required one is
+missing, the server still starts, but prints `⚠️ Missing settings: …` and the
+page that needs it shows an error naming it.
 
 Example:
 
@@ -53,6 +60,9 @@ cp .env.example .env
 
 `.env` is git-ignored because the session tokens are credentials. After editing
 it, restart the server — it is only read at startup.
+
+The Docker image never contains `.env`, so on Coolify every **required**
+variable above must be set in the platform's environment settings.
 
 ## Two addresses
 
@@ -223,9 +233,9 @@ so it takes under a second) and keeps only that topic's fact-checks. It has
 the same sidebar, so you can jump between topics, and a link back to the month
 report.
 
-`REPORT_API` points at `127.0.0.1:8000` by default, because the deployed
-service has no report route yet. Set it on the server when it does —
-`REPORT_MONTHS_API` follows it on its own.
+`REPORT_API` points at `127.0.0.1:8000` in `.env.example`, because the
+deployed service has no report route yet. Change it when it does —
+`REPORT_MONTHS_API` follows it on its own when left out.
 
 This app never connects to Postgres. The database login (`DB_HOST`,
 `DB_PASSWORD`, `RESEARCH_DB_NAME`, …) lives only in the FastAPI service's own
