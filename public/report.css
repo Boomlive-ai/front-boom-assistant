@@ -633,6 +633,146 @@ body {
   color: #999;
 }
 
+/* ---------- page with the topics sidebar ---------- */
+/* Wider than style.css's 900px, so the sidebar fits beside a full-width
+   report. The form card and a report without a sidebar keep the old width. */
+.rp-page {
+  max-width: 1200px;
+}
+.rp-form-card,
+.rp-layout {
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+}
+.rp-layout.has-sidebar {
+  max-width: none;
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+/* Stays in view while the report scrolls; the list scrolls on its own. */
+.rp-sidebar {
+  position: sticky;
+  top: 16px;
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border-radius: 4px;
+  padding: 18px 12px 12px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.rp-sidebar[hidden] {
+  display: none;
+}
+.rp-side-title {
+  margin: 0 6px 4px;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 20px;
+}
+.rp-side-sub {
+  margin: 0 6px 10px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: #777;
+}
+.rp-side-search {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 7px 10px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  font: inherit;
+  font-size: 14px;
+}
+.rp-side-search:focus {
+  outline: 2px solid #2b6cff;
+  outline-offset: -1px;
+}
+.rp-side-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.rp-side-link {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  line-height: 1.35;
+  color: #222;
+}
+.rp-side-link:hover,
+.rp-side-link:focus-visible {
+  background: #f2f2f2;
+}
+.rp-side-link.is-current {
+  background: #1a1a1a;
+  color: #fff;
+}
+.rp-side-count {
+  flex: none;
+  font-size: 12px;
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+.rp-side-link.is-current .rp-side-count {
+  color: #ccc;
+}
+.rp-side-empty {
+  margin: 6px 8px;
+  font-size: 13px;
+  color: #888;
+}
+
+/* Below this width the sidebar sits above the report instead. */
+@media (max-width: 900px) {
+  .rp-layout.has-sidebar {
+    display: block;
+  }
+  .rp-sidebar {
+    position: static;
+    max-height: 320px;
+    margin-bottom: 18px;
+  }
+}
+
+/* ---------- topic page ---------- */
+.rp-status {
+  max-width: 860px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 22px 26px;
+  font-size: 15px;
+  color: #444;
+}
+.rp-status[hidden] {
+  display: none;
+}
+.rp-status.is-error {
+  color: #b71c1c;
+}
+.rp-status p {
+  margin: 0;
+}
+.rp-status p + p {
+  margin-top: 10px;
+}
+.rp-claim {
+  margin: 4px 0 0 !important;
+  font-size: 12.5px;
+  color: #666;
+}
+
 /* ---------- small screens ---------- */
 @media (max-width: 640px) {
   .report {
@@ -669,8 +809,9 @@ body {
 }
 
 /* ---------- print / Save as PDF ---------- */
-/* Page numbers in the margin (Chrome). The left-hand footer with the month is
-   added by report.js, since only it knows the month. */
+/* Page numbers in the margin (Chrome). The left-hand footer with the month
+   (and topic) is added by setPrintFooter() in report-common.js, since only the
+   page script knows them. */
 @page {
   size: A4;
   margin: 16mm 15mm 18mm;
@@ -726,5 +867,11 @@ body {
   }
   .rp-table-wrap {
     overflow: visible;
+  }
+  /* The sidebar is hidden (no-print), so the report takes the whole page. */
+  .rp-layout,
+  .rp-layout.has-sidebar {
+    display: block;
+    max-width: none;
   }
 }

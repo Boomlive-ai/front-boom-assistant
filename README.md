@@ -68,7 +68,8 @@ Two things make this work, and both must be kept:
 
 1. **Internal links in `public/` never start with `/`.** They are written as
    `style.css`, `script.js`, `api/generate`, `api/create-feed`, `report.html`,
-   `report.css`, `report.js`, `api/report`, `api/report/months` and `./`. A leading
+   `report.css`, `report-common.js`, `report.js`, `topic.html`, `topic.js`,
+   `api/report`, `api/report/months` and `./`. A leading
    slash means "go back
    to the top of the website", which on the toolbox host lands on the PHP app.
    Adding a `/` in front of any of these silently breaks the folder address.
@@ -201,6 +202,25 @@ form. **Print / Save as PDF** opens the browser's print dialog with
 only the report on the page; in Chrome, choose "Save as PDF" and the pages get
 numbers and a month footer like the PDF draft.
 
+### Topic reports
+
+Next to the report, a **Topics** sidebar lists every topic of that month, the
+biggest first, with its number of fact-checks. Type in **Find a topic…** to
+narrow the list. Clicking a topic opens its own report in a new tab
+(`topic.html?month=2026-01&topic=Iran+unrest`):
+
+- a headline and stat cards — how many fact-checks, their share of the month,
+  and how many involved AI, old content or media misreporting;
+- a dot timeline of when they were published;
+- the split by language, medium, type of deception and intent;
+- who was targeted and who spread the claims;
+- every fact-check on the topic, with its claim.
+
+The topic page asks for the month from the database again (without AI text,
+so it takes under a second) and keeps only that topic's fact-checks. It has
+the same sidebar, so you can jump between topics, a link back to the month
+report, and its own **Print / Save as PDF**.
+
 `REPORT_API` points at `127.0.0.1:8000` by default, because the deployed
 service has no report route yet. Set it on the server when it does —
 `REPORT_MONTHS_API` follows it on its own.
@@ -217,10 +237,13 @@ front-boom-assistant/
 ├── server.js            # Express + proxy, mounted at / and BASE_PATH
 ├── public/
 │   ├── index.html       # Form + response layout, trailing-slash guard
-│   ├── style.css        # BOOM-style styling (shared by both pages)
+│   ├── style.css        # BOOM-style styling (shared by all pages)
 │   ├── script.js        # Fetch + editable rendering
 │   ├── report.html      # Monthly Report page
-│   ├── report.css       # Report layout, charts, print styles
-│   └── report.js        # Month dropdown, upload, report rendering
+│   ├── report.css       # Report + topic layout, sidebar, charts, print styles
+│   ├── report-common.js # Helpers shared by report.js and topic.js
+│   ├── report.js        # Month dropdown, upload, report rendering
+│   ├── topic.html       # One topic's report for one month
+│   └── topic.js         # Loads the month, keeps one topic, draws it
 └── README.md
 ```

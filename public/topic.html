@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>BOOM Topic Report</title>
+
+    <!-- Relative on purpose, like report.html — see README "Two addresses".
+         Opened as topic.html?month=2026-01&topic=…, from the topics sidebar
+         on the Monthly Report page. -->
+    <link rel="stylesheet" href="style.css" />
+    <link rel="stylesheet" href="report.css" />
+    <!-- Filled in by topic.js with the topic and month, for the printed page footer. -->
+    <style id="print-footer"></style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-text">BOOM</span>
+      </div>
+      <nav class="topbar-nav">
+        <a href="report.html" class="nav-btn">← Monthly Report</a>
+        <!-- Absolute on purpose, same as on the other pages. -->
+        <a href="https://toolbox.boomlive.in/">Home</a>
+      </nav>
+    </header>
+
+    <main class="page rp-page">
+      <!-- Loading message, or what went wrong. -->
+      <div id="topic-status" class="card rp-status no-print" role="status">
+        <p>Loading the topic report…</p>
+      </div>
+
+      <div id="topic-layout" class="rp-layout">
+        <!-- The same topics list as on the Monthly Report page, with this
+             topic marked; here the links open in this tab. -->
+        <aside id="topic-nav" class="rp-sidebar no-print" aria-label="Topics" hidden></aside>
+
+        <div class="rp-main">
+          <div id="topic-tools" class="rp-tools no-print" hidden>
+            <a id="month-link" class="btn ghost small" href="report.html">← Month report</a>
+            <div class="rp-tools-actions">
+              <button type="button" id="print-btn" class="btn primary small">Print / Save as PDF</button>
+            </div>
+          </div>
+
+          <!-- Drawn by renderTopic() in topic.js. -->
+          <article id="report" class="card report" hidden></article>
+        </div>
+      </div>
+
+      <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    </main>
+
+    <!-- Absolute like the Home link above. -->
+    <footer class="sitefoot">
+      <nav class="sitefoot-links">
+        <a href="https://toolbox.boomlive.in/privacy.php">Privacy Policy</a>
+        <a href="https://toolbox.boomlive.in/data-deletion.php">Data Deletion</a>
+      </nav>
+    </footer>
+
+    <!-- Shared helpers first: topic.js calls them. -->
+    <script src="report-common.js"></script>
+    <script src="topic.js"></script>
+  </body>
+</html>
