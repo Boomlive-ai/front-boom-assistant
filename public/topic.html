@@ -6,8 +6,8 @@
     <title>BOOM Topic Report</title>
 
     <!-- Relative on purpose, like report.html — see README "Two addresses".
-         Opened as topic.html?month=2026-01&topic=…, from the topics sidebar
-         on the Monthly Report page. -->
+         Opened as topic.html?from=2026-01-01&to=2026-01-31&topic=…, from the
+         topics sidebar on the report page. -->
     <link rel="stylesheet" href="style.css" />
     <link rel="stylesheet" href="report.css" />
     <!-- Filled in by topic.js with the topic and month, for the printed page footer. -->
@@ -38,7 +38,8 @@
 
         <div class="rp-main">
           <div id="topic-tools" class="rp-tools no-print" hidden>
-            <a id="month-link" class="btn ghost small" href="report.html">← Month report</a>
+            <!-- topic.js points it at report.html?from=…&to=… (dates filled in, not started). -->
+            <a id="month-link" class="btn ghost small" href="report.html">← Back to the report</a>
           </div>
 
           <!-- Drawn by renderTopic() in topic.js. -->

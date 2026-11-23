@@ -1,34 +1,29 @@
-// report.js — Monthly Report page. The editor picks a month first: months
-// saved in the research database are reported on straight away, and any other
-// month needs the fact-check sheet uploaded. The reply from api/report is drawn
-// in the layout of BOOM's monthly report PDF, with a sidebar of the month's
-// topics that each open topic.html in a new tab.
+// report.js — the report page. The editor picks a From Date and a To Date (by
+// default the month up to today) and clicks Generate Report. The page asks
+// api/report/range for that range, with the text written by AI, and draws the
+// reply in the layout of BOOM's monthly report PDF, with a sidebar of the
+// range's topics that each open topic.html in a new tab.
 //
-// report-common.js is loaded first and supplies el(), the chart pieces and the
-// sidebar — this file holds only what belongs to this page.
+// report-common.js is loaded first and supplies el(), the chart pieces, the
+// date helpers and the sidebar — this file holds only what belongs to this page.
 
 const form = document.getElementById('report-form');
-const monthSelect = document.getElementById('month-select');
-const otherMonthRow = document.getElementById('other-month-row');
-const otherMonth = document.getElementById('other-month');
-const monthStatus = document.getElementById('month-status');
-const sheetField = document.getElementById('sheet-field');
-const sheetStatus = document.getElementById('sheet-status');
+const fromInput = document.getElementById('from-date');
+const toInput = document.getElementById('to-date');
+const datesNote = document.getElementById('dates-note');
 const reportBtn = document.getElementById('report-btn');
 const reportError = document.getElementById('report-error');
-const reportTools = document.getElementById('report-tools');
-const monthSwitch = document.getElementById('month-switch');
 const reportLayout = document.getElementById('report-layout');
 const topicNav = document.getElementById('topic-nav');
 const report = document.getElementById('report');
 
-// Months saved in the database, "2026-01" → {month, label, fact_checks}.
-// Filled by loadMonths(); empty when the list could not be loaded.
-let savedMonths = new Map();
+// The backend refuses a longer range, so the page checks first.
+const MAX_RANGE_DAYS = 366;
 
-// Value of the dropdown's "Another month" option. Not a YYYY-MM, so it can
-// never be mistaken for a real month.
-const OTHER = 'other';
+// What the database covers, from api/report/dates:
+// {data_from, data_to, fact_checks, default_from, default_to}. null until it
+// has loaded, or when it could not be loaded.
+let dataSpan = null;
 
 // ---------- utilities ----------
 function setLoading(loading) {
@@ -40,198 +35,119 @@ function setLoading(loading) {
     : 'Generate Report';
 }
 
-// ---------- month dropdown ----------
-
-function setNote(node, text, isError = false) {
-  node.replaceChildren(...[].concat(text).filter(Boolean));
+function setNote(node, parts, isError = false) {
+  node.replaceChildren(...[].concat(parts).filter(Boolean));
   node.classList.toggle('is-error', isError);
 }
 
-// Asks the server which months the database has and rebuilds the dropdown:
-// those months newest first, then "Another month". `keep` is the month to
-// leave selected afterwards (after an upload, the month just reported on).
-async function loadMonths(keep) {
-  monthSelect.disabled = true;
-  monthSelect.replaceChildren(el('option', null, 'Loading months…'));
-  monthSelect.options[0].value = '';
-  setNote(monthStatus, '');
+// `extra` may hold null / false (from `cond && el(…)`), which are skipped —
+// replaceChildren() would otherwise print them as the words "null" / "false".
+function showError(message, ...extra) {
+  reportError.replaceChildren(el('p', null, message), ...extra.filter(Boolean));
+  reportError.hidden = false;
+}
 
-  let months = [];
-  let failure = '';
+// ---------- dates ----------
+
+// Today as YYYY-MM-DD in the editor's own time zone. (toISOString() would give
+// the UTC date, which in India is still yesterday before 5:30 am.)
+function todayIso() {
+  const d = new Date();
+  const two = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}`;
+}
+
+// The same day one month earlier: 23 Nov → 23 Oct. A day the earlier month
+// does not have becomes its last day: 31 Mar → 28 Feb.
+function oneMonthBefore(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const daysInPrevMonth = new Date(Date.UTC(y, m - 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m - 2, Math.min(d, daysInPrevMonth))).toISOString().slice(0, 10);
+}
+
+// Days from `from` to `to`, both counted: 1 Jan – 1 Feb is 32.
+const daysCovered = (from, to) => Math.round((Date.parse(to) - Date.parse(from)) / 86400000) + 1;
+
+// The calendar only offers dates that keep From on or before To.
+function linkDateLimits() {
+  toInput.min = fromInput.value || '';
+  fromInput.max = toInput.value || '';
+}
+
+function setDates(from, to) {
+  fromInput.value = from;
+  toInput.value = to;
+  linkDateLimits();
+  updateDatesNote();
+}
+
+// A button that fills in the last month the database has — it only fills the
+// dates; the report still waits for Generate Report.
+function latestMonthButton() {
+  if (!dataSpan || !dataSpan.data_to) return null;
+  const to = dataSpan.default_to || dataSpan.data_to;
+  const from = dataSpan.default_from || oneMonthBefore(to);
+  const btn = el('button', 'btn ghost small', `Use ${longDate(from)} – ${longDate(to)}`);
+  btn.type = 'button';
+  btn.title = 'The latest month that has fact-checks in the database';
+  btn.addEventListener('click', () => {
+    setDates(from, to);
+    reportError.hidden = true;
+    form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    reportBtn.focus({ preventScroll: true });
+    showToast('Dates filled in — click Generate Report');
+  });
+  return btn;
+}
+
+// The line under the dates: what the database covers, and a warning when the
+// chosen dates fall completely outside it (the report would come back empty).
+function updateDatesNote() {
+  if (!dataSpan || !dataSpan.data_from) return;
+  const span = `${longDate(dataSpan.data_from)} – ${longDate(dataSpan.data_to)}`;
+  const from = fromInput.value;
+  const to = toInput.value;
+  const outside =
+    isIsoDate(from) && isIsoDate(to) && (to < dataSpan.data_from || from > dataSpan.data_to);
+  if (outside) {
+    setNote(
+      datesNote,
+      [`No fact-checks in these dates: the database has ${span}. `, latestMonthButton()],
+      true
+    );
+  } else {
+    setNote(datesNote, `Data in the database: ${span} (${dataSpan.fact_checks} fact-checks).`);
+  }
+}
+
+async function loadDataSpan() {
   try {
     // Relative on purpose — see README "Two addresses".
-    const res = await fetch('api/report/months', {
+    const res = await fetch('api/report/dates', {
       headers: { accept: 'application/json' },
       cache: 'no-store',
     });
-    const text = await res.text();
-    let data;
-    try {
-      data = JSON.parse(text);
-    } catch {
-      throw new Error('Server returned non-JSON: ' + text.slice(0, 200));
-    }
+    const data = await res.json();
     if (!res.ok) throw new Error(extractErrorMessage(data, res.status));
-    months = Array.isArray(data) ? data : data.months || [];
+    dataSpan = data;
+    updateDatesNote();
   } catch (err) {
-    console.error('Could not load the saved months:', err);
-    failure = err.message || 'Request failed';
-  }
-
-  savedMonths = new Map(
-    months.filter((m) => m && /^\d{4}-\d{2}$/.test(m.month)).map((m) => [m.month, m])
-  );
-
-  const other = el('option', null, 'Another month (upload the sheet)…');
-  other.value = OTHER;
-
-  if (savedMonths.size) {
-    const placeholder = el('option', null, 'Choose a month…');
-    placeholder.value = '';
-    placeholder.defaultSelected = true;
-    const group = el('optgroup');
-    // group.label = 'In the database';
-    [...savedMonths.values()]
-      .sort((a, b) => b.month.localeCompare(a.month))
-      .forEach((m) => {
-        const opt = el(
-          'option',
-          null,
-          `${m.label || monthLabel(m.month)} · ${m.fact_checks ?? '?'} fact-checks`
-        );
-        opt.value = m.month;
-        group.append(opt);
-      });
-    const otherGroup = el('optgroup', null, other);
-    otherGroup.label = 'Not in the database';
-    monthSelect.replaceChildren(placeholder, group, otherGroup);
-  } else {
-    // Nothing to pick from, so "Another month" is the only choice — and the
-    // one Reset goes back to.
-    other.defaultSelected = true;
-    monthSelect.replaceChildren(other);
-  }
-  monthSelect.disabled = false;
-
-  if (failure) {
-    const retry = el('button', 'rp-link-btn', 'Try again');
-    retry.type = 'button';
-    retry.addEventListener('click', () => loadMonths(keep));
-    setNote(
-      monthStatus,
-      [`Could not load the months from the database (${failure}). You can still upload a sheet. `, retry],
-      true
-    );
-  } else if (!savedMonths.size) {
-    setNote(monthStatus, 'The database has no months yet. Upload a sheet to add some.');
-  }
-
-  if (keep) chooseMonth(keep);
-  else syncMonthUi();
-}
-
-// Picks `month` in the form: from the dropdown when the database has it,
-// otherwise as "Another month" with the month filled in.
-function chooseMonth(month) {
-  if (savedMonths.has(month)) {
-    monthSelect.value = month;
-  } else {
-    monthSelect.value = OTHER;
-    otherMonth.value = month;
-  }
-  syncMonthUi();
-}
-
-// The month the form will report on, and whether the database has it.
-function selectedMonth() {
-  const choice = monthSelect.value;
-  if (savedMonths.has(choice)) return { month: choice, fromDb: true };
-  if (choice === OTHER) return { month: otherMonth.value.trim(), fromDb: false };
-  return { month: '', fromDb: false };
-}
-
-// Shows the month box for "Another month", and switches the sheet upload on
-// only when it is needed: a month the database does not have.
-function syncMonthUi() {
-  const choice = monthSelect.value;
-  const isOther = choice === OTHER;
-  otherMonthRow.hidden = !isOther;
-  sheetField.disabled = !isOther;
-
-  const saved = savedMonths.get(choice);
-  if (saved) {
-    const label = saved.label || monthLabel(saved.month);
-    // setNote(sheetStatus, `Not needed: ${label} is already in the database.`);
-  } else if (isOther) {
-    setNote(
-      sheetStatus,
-      'Needed: choose the sheet that has this month. It is saved to the database, so next time you can pick the month from the list.'
-    );
-  } else {
-    setNote(sheetStatus, 'Choose a month first.');
+    // Only a hint is lost: the report itself can still be asked for.
+    console.error('Could not load the dates the database covers:', err);
+    setNote(datesNote, '');
   }
 }
 
-// An old error is about the month that was picked before, so it goes.
-monthSelect.addEventListener('change', () => {
+fromInput.addEventListener('change', () => {
   reportError.hidden = true;
-  syncMonthUi();
-  if (monthSelect.value === OTHER) otherMonth.focus();
+  linkDateLimits();
+  updateDatesNote();
 });
-
-// Typed a month the database already has? Pick it from the list instead, so no
-// upload is asked for.
-otherMonth.addEventListener('change', () => {
+toInput.addEventListener('change', () => {
   reportError.hidden = true;
-  const month = otherMonth.value;
-  if (!savedMonths.has(month)) return;
-  chooseMonth(month);
-  showToast(`${monthLabel(month)} is already in the database — no upload needed`);
+  linkDateLimits();
+  updateDatesNote();
 });
-
-// ---------- month buttons ----------
-
-// Picks a month for the next report WITHOUT starting it: a report starts only
-// when the editor clicks Generate Report (each one is an AI call). The form
-// scrolls into view with the button focused, so it is one click away.
-function pickMonthForNextReport(month) {
-  chooseMonth(month);
-  reportError.hidden = true;
-  form.scrollIntoView({ behavior: 'smooth', block: 'center' });
-  reportBtn.focus({ preventScroll: true });
-  showToast(`${monthLabel(month)} picked — click Generate Report`);
-}
-
-// One button per month the report covers. Clicking one only picks that month
-// in the form (see pickMonthForNextReport); the report itself waits for
-// Generate Report — from the database when it has the month, otherwise with
-// the file that is still selected in the form.
-function monthButtons(months, current) {
-  const row = el('div', 'rp-month-row');
-  months.forEach((m) => {
-    const btn = el('button', 'btn ghost small', m.short_label || m.label || m.month);
-    btn.type = 'button';
-    btn.title = `${m.label}: ${m.fact_checks} fact-checks`;
-    if (m.month === current) {
-      btn.disabled = true;
-      btn.classList.add('is-current');
-    }
-    btn.addEventListener('click', () => pickMonthForNextReport(m.month));
-    row.append(btn);
-  });
-  return row;
-}
-
-function showError(message, months) {
-  reportError.replaceChildren(el('p', null, message));
-  if (Array.isArray(months) && months.length) {
-    reportError.append(
-      el('p', 'rp-error-hint', 'Months that have data:'),
-      monthButtons(months, '')
-    );
-  }
-  reportError.hidden = false;
-}
 
 // ---------- month charts ----------
 
@@ -260,12 +176,13 @@ function columnChart(title, months, key, max) {
   return el('div', 'rp-colchart', el('h4', null, title), cols, labels);
 }
 
-// ---------- month report sections ----------
+// ---------- report sections ----------
 
 function statCards(s) {
-  // Compared with the month before when the sheet has it; January has none,
-  // so it shows the busiest day instead.
-  const prev = s.previous_month;
+  // Compared with the period before when the database has it (the month before
+  // for a whole month, otherwise the same number of days just before);
+  // otherwise the busiest day.
+  const prev = s.previous_period || s.previous_month;
   let firstSub = '';
   if (prev && prev.fact_checks != null) {
     const change =
@@ -303,7 +220,7 @@ function highlightsBox(list) {
   );
 }
 
-function monthlyChart(monthly, label) {
+function monthlyChart(monthly) {
   // A month still being filled in would look like a slump, so it is left out —
   // the PDF draft did the same with September.
   const months = (monthly || []).filter((m) => !m.partial);
@@ -311,8 +228,12 @@ function monthlyChart(monthly, label) {
   if (!months.length) return null;
 
   const max = Math.max(1, ...months.map((m) => m.fact_checks || 0));
-  const selected = months.find((m) => m.selected);
-  const busiest = selected && months.every((m) => (m.fact_checks || 0) <= selected.fact_checks);
+  // `selected` marks every month the chosen dates touch.
+  const selected = months.filter((m) => m.selected);
+  const busiest =
+    selected.length === 1 &&
+    months.every((m) => (m.fact_checks || 0) <= selected[0].fact_checks) &&
+    selected[0];
 
   const first = months[0].label || '';
   const last = months[months.length - 1].label || '';
@@ -320,10 +241,9 @@ function monthlyChart(monthly, label) {
   const range = months.length > 1 ? `${sameYear ? monthName(first) : first}–${last}` : first;
 
   return chartCard(
-    busiest
-      ? `${monthName(label)} was the busiest month in this sheet`
-      : 'Fact-checks per month',
-    `Fact-checks published per month, and how many of them involved AI, ${range}`,
+    busiest ? `${busiest.label} was the busiest month in the data` : 'Fact-checks per month',
+    `Fact-checks published per month, and how many of them involved AI, ${range}.` +
+      (selected.length ? ' The months these dates cover have their numbers shown.' : ''),
     el(
       'div',
       'rp-two-col',
@@ -341,7 +261,7 @@ function languageChart(language, total, label) {
   if (!Array.isArray(language) || !language.length) return null;
   const top = language[0];
   return chartCard(
-    `${top.label} made up ${pct(top.percent)} of ${monthName(label)}'s fact-checks`,
+    `${top.label} made up ${pct(top.percent)} of the fact-checks`,
     `Share of fact-checks by publishing language, ${label} (n = ${total})`,
     stackedBar(language)
   );
@@ -359,14 +279,13 @@ function topicsChart(topics, label) {
   );
 }
 
-function timelineChart(themes, daily, label) {
-  if (!Array.isArray(themes) || !themes.length) return null;
-  const days = (daily && daily.length) || 31;
+function timelineChart(themes, dates, meta, label) {
+  if (!Array.isArray(themes) || !themes.length || !dates.length) return null;
   return chartCard(
     'When the biggest stories broke',
     'Each dot is one fact-check, placed on the day it was published. Hover a dot for its headline.',
-    dotTimeline(themes, days),
-    el('p', 'rp-axis-title', `Day of ${label}`)
+    dotTimeline(themes, dates),
+    el('p', 'rp-axis-title', meta.whole_month ? `Day of ${label}` : `Date, ${label}`)
   );
 }
 
@@ -450,7 +369,7 @@ function breakdownsSection(b, total, label) {
       medium.length
         ? `${pct(medium[0].percent)} of fact-checks involved ${medium[0].label.toLowerCase()}`
         : 'Medium, intent and type of deception',
-      `Share of ${label} fact-checks by medium, intent and type of deception (n = ${total})`,
+      `Share of fact-checks by medium, intent and type of deception, ${label} (n = ${total})`,
       stackedGroup('Medium', b.medium),
       stackedGroup('Intent', b.intent),
       stackedGroup('Type of deception', b.type)
@@ -473,10 +392,10 @@ function notesBox(dataNotes, flags) {
   );
 }
 
-function appendix(factChecks, label) {
+function appendix(factChecks) {
   if (!Array.isArray(factChecks) || !factChecks.length) return null;
   return section(
-    `Appendix: all ${monthName(label)} fact-checks`,
+    `Appendix: all ${factChecks.length} fact-checks`,
     el(
       'p',
       null,
@@ -500,22 +419,24 @@ function renderReport(data) {
   const meta = data.meta || {};
   const n = data.narrative || {};
   const s = data.summary || {};
-  const label = meta.label || meta.month || '';
+  // "January 2026" for a whole month, otherwise "15 February – 20 March 2026".
+  const label = meta.label || `${meta.from_date} – ${meta.to_date}`;
 
-  // "Period: 1–31 January 2026 · Based on … (Hindi, Bangla and English)"
+  // Every date of the range, in order: the x axis of the dot timeline.
   const daily = data.daily || [];
+  const dates = daily.length ? daily.map((d) => d.date) : datesBetween(meta.from_date, meta.to_date);
+
+  // "Period: 15 February – 20 March 2026 (34 days) · Based on … (Hindi, Bangla and English)"
   const languages = (data.language || []).map((l) => l.label);
   const period = [
-    daily.length && `Period: ${daily[0].day}–${daily[daily.length - 1].day} ${label}`,
+    `Period: ${label}${meta.days ? ` (${meta.days} days)` : ''}`,
     `Based on BOOM's coded fact-check database${languages.length ? ` (${joinAnd(languages)})` : ''}`,
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  ].join(' · ');
 
   report.replaceChildren(
     masthead(),
-    el('p', 'rp-kicker', `Monthly misinformation report · ${label}`),
-    el('h1', 'rp-headline', n.headline || `BOOM Monthly Report: ${label}`),
+    el('p', 'rp-kicker', `${meta.whole_month ? 'Monthly misinformation' : 'Misinformation'} report · ${label}`),
+    el('h1', 'rp-headline', n.headline || `BOOM Research Report: ${label}`),
     n.standfirst && el('p', 'rp-standfirst', n.standfirst),
     el('p', 'rp-period', period),
     statCards(s),
@@ -523,13 +444,13 @@ function renderReport(data) {
     section(
       'Overview',
       ...paragraphs(n.overview),
-      monthlyChart(data.monthly, label),
+      monthlyChart(data.monthly),
       languageChart(data.language, s.fact_checks, label)
     ),
     section(
       'What was fact-checked',
       topicsChart(data.topics, label),
-      timelineChart(data.themes, daily, label)
+      timelineChart(data.themes, dates, meta, label)
     ),
     data.targets && data.targets.length
       ? section('Who was targeted', targetsChart(data.targets, label))
@@ -539,71 +460,56 @@ function renderReport(data) {
     themesSection(data.themes),
     breakdownsSection(data.breakdowns, s.fact_checks, label),
     notesBox(data.data_notes, data.flags),
-    appendix(data.fact_checks, label),
+    appendix(data.fact_checks),
     footnote(meta, data.narrative_source, label)
   );
 
   // There is no print button, but if someone prints anyway (Ctrl+P), the page
   // title becomes the file name and Chrome prints this footer on every page.
-  document.title = `BOOM Monthly Report ${label}`;
-  setPrintFooter(`BOOM Monthly Report · ${label} · Draft`);
+  document.title = `BOOM Report ${label}`;
+  setPrintFooter(`BOOM Report · ${label} · Draft`);
 
-  // Every topic of the month, each opening its own report in a new tab.
+  // Every topic in the range, each opening its own report in a new tab.
   showTopicSidebar(topicNav, reportLayout, data, { newTab: true });
 
-  monthSwitch.replaceChildren(
-    el('span', 'rp-month-switch-label', 'Other months:'),
-    monthButtons(data.monthly || [], meta.month)
-  );
-  reportTools.hidden = false;
   report.hidden = false;
-  reportTools.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  reportLayout.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ---------- form submit ----------
+// The only thing that ever asks for a report: every report is an AI call.
 form.addEventListener('submit', async (e) => {
   e.preventDefault();
 
-  const { month, fromDb } = selectedMonth();
-  const file = form.elements.file.files[0];
+  const from = fromInput.value;
+  const to = toInput.value;
 
-  if (!month) {
-    showError(
-      monthSelect.value === OTHER
-        ? 'Pick the month to report on in the "Which month?" box.'
-        : 'Choose a month first.'
-    );
+  if (!isIsoDate(from) || !isIsoDate(to)) {
+    showError('Pick both dates: a From Date and a To Date.');
     return;
   }
-  if (!/^\d{4}-\d{2}$/.test(month)) {
-    showError('Pick the month to report on (YYYY-MM, for example 2026-01).');
+  if (from > to) {
+    showError('The From Date must be on or before the To Date.');
     return;
   }
-  if (!fromDb && !file) {
-    showError(`${monthLabel(month)} is not in the database yet, so choose the Excel sheet that has it.`);
+  const days = daysCovered(from, to);
+  if (days > MAX_RANGE_DAYS) {
+    showError(`A report can cover at most ${MAX_RANGE_DAYS} days; these dates cover ${days}.`);
     return;
   }
 
-  // Built by hand rather than sending the form as it is. The file goes only
-  // for a month the database lacks — without one, the API builds the report
-  // from the database. narrative is always "true": the report text is always
-  // written by AI (the API falls back to template text only if that fails,
-  // and then says so in `flags`).
-  const body = new FormData();
-  if (!fromDb) body.append('file', file);
-  body.append('month', month);
-  body.append('narrative', 'true');
+  // narrative is always "true": the report text is always written by AI (the
+  // API falls back to template text only if that fails, and then says so in
+  // `flags`).
+  const params = new URLSearchParams({ from_date: from, to_date: to, narrative: 'true' });
 
   reportError.hidden = true;
   setLoading(true);
   try {
     // Relative on purpose, so the app also works when it is served from a
     // folder path such as /front-boom-assistant/ — see README "Two addresses".
-    // No Content-Type header: the browser adds it, with the multipart boundary.
-    const res = await fetch('api/report', {
-      method: 'POST',
+    const res = await fetch(`api/report/range?${params}`, {
       headers: { accept: 'application/json' },
-      body,
     });
     const text = await res.text();
     let data;
@@ -614,18 +520,30 @@ form.addEventListener('submit', async (e) => {
     }
     if (!res.ok) {
       const err = new Error(extractErrorMessage(data, res.status));
-      // The API lists the months it does have when the one asked for is empty.
-      err.months = data && data.detail && data.detail.available_months;
+      // A range with no fact-checks: {detail: {code: "no_data_in_range",
+      // message, data_from, data_to}}.
+      err.detail = data && data.detail;
       throw err;
     }
     renderReport(data);
     showToast('Report ready');
-    // The API saves an uploaded sheet to the database, so its months belong
-    // in the dropdown now; the month just reported on stays picked.
-    if (!fromDb) loadMonths((data.meta && data.meta.month) || month);
   } catch (err) {
     console.error(err);
-    showError(err.message || 'Request failed', err.months);
+    const detail = err.detail && typeof err.detail === 'object' ? err.detail : null;
+    if (detail && detail.data_from && !dataSpan) {
+      dataSpan = { data_from: detail.data_from, data_to: detail.data_to };
+    }
+    showError(
+      err.message || 'Request failed',
+      detail &&
+        detail.data_from &&
+        el(
+          'p',
+          'rp-error-hint',
+          `The database has fact-checks from ${longDate(detail.data_from)} to ${longDate(detail.data_to)}. `
+        ),
+      detail && detail.code === 'no_data_in_range' && latestMonthButton()
+    );
     showToast(err.message || 'Request failed', true);
   } finally {
     setLoading(false);
@@ -634,14 +552,28 @@ form.addEventListener('submit', async (e) => {
 
 form.addEventListener('reset', () => {
   reportError.hidden = true;
-  // The reset event fires before the fields are cleared, so wait a tick.
-  setTimeout(syncMonthUi);
+  // The reset event fires before the fields go back to their defaults.
+  setTimeout(() => {
+    linkDateLimits();
+    updateDatesNote();
+  });
 });
 
-// report.html?month=2026-01 (the link back from a topic page) picks that month
-// in the dropdown, when the database has it — but does not start the report.
-// Nothing here ever submits by itself: only Generate Report does.
-const startMonth = new URLSearchParams(location.search).get('month');
-loadMonths().then(() => {
-  if (startMonth && savedMonths.has(startMonth)) chooseMonth(startMonth);
-});
+// ---------- start ----------
+// Defaults: To = today, From = one month earlier. Set as the fields' default
+// values, so Reset goes back to them too.
+const today = todayIso();
+toInput.defaultValue = today;
+fromInput.defaultValue = oneMonthBefore(today);
+
+// report.html?from=…&to=… (the link back from a topic page) fills in those
+// dates instead — but, like everything else, does not start the report.
+const startParams = new URLSearchParams(location.search);
+const startFrom = startParams.get('from');
+const startTo = startParams.get('to');
+if (isIsoDate(startFrom) && isIsoDate(startTo) && startFrom <= startTo) {
+  fromInput.value = startFrom;
+  toInput.value = startTo;
+}
+linkDateLimits();
+loadDataSpan();

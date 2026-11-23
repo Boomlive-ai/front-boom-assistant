@@ -63,14 +63,15 @@ const setting = (name) => (process.env[name] || '').trim();
 const GENERATE_API = setting('GENERATE_API');
 // Hocalwire createFeedV2.
 const CREATE_FEED_API = setting('CREATE_FEED_API');
-// The Monthly Report page: the FastAPI /boom-research/report route.
-const REPORT_API = setting('REPORT_API');
-// The months saved in the research database, for the report page's month
-// dropdown. The FastAPI service reads them from Postgres, so this app never
-// holds the database login. When it is not set, it is the /months route next
-// to REPORT_API, so setting REPORT_API alone moves both.
-const REPORT_MONTHS_API =
-  setting('REPORT_MONTHS_API') || REPORT_API.replace(/\/report\/?$/, '/months');
+// The report pages: the FastAPI /boom-research/range-report route, which
+// builds a report for any From–To dates from the research database. The
+// FastAPI service reads Postgres, so this app never holds the database login.
+const REPORT_RANGE_API = setting('REPORT_RANGE_API');
+// The dates the database covers, shown under the date pickers. When it is not
+// set, it is the /dates route next to REPORT_RANGE_API, so setting
+// REPORT_RANGE_API alone moves both.
+const REPORT_DATES_API =
+  setting('REPORT_DATES_API') || REPORT_RANGE_API.replace(/\/range-report\/?$/, '/dates');
 
 // Hocalwire session token, one per story language. The editor used to type
 // this into the page; now the browser only sends the language and the token is
@@ -92,7 +93,7 @@ const REQUIRED = {
   GENERATE_API,
   CREATE_FEED_API,
   FEED_CATEGORY_ID,
-  REPORT_API,
+  REPORT_RANGE_API,
 };
 
 // Answers 500 naming the setting when it is empty, and returns false; the
@@ -135,16 +136,13 @@ function proxyJson(targetUrl, req, res) {
   return forward(targetUrl, res, 'application/json', JSON.stringify(req.body));
 }
 
-// Same pipe for a file upload. express.raw() below keeps the multipart body as
-// raw bytes, and the browser's Content-Type header (which carries the boundary
-// that separates the parts) goes along with it, so nothing is unpacked here.
-function proxyUpload(targetUrl, req, res) {
-  return forward(targetUrl, res, req.headers['content-type'], req.body);
-}
-
-// Same pipe for a plain GET: nothing is sent, the reply comes back as it is.
-function proxyGet(targetUrl, res) {
-  return forward(targetUrl, res, null, undefined, 'GET');
+// Same pipe for a plain GET. The browser's query string (?from_date=…) is
+// passed on unchanged, so here too nothing is read or reshaped. Only the query
+// travels: the address itself always comes from the setting.
+function proxyGet(targetUrl, req, res) {
+  const q = req.originalUrl.indexOf('?');
+  const query = q === -1 ? '' : req.originalUrl.slice(q);
+  return forward(targetUrl + query, res, null, undefined, 'GET');
 }
 
 async function forward(targetUrl, res, contentType, body, method = 'POST') {
@@ -208,34 +206,22 @@ router.post('/api/create-feed', (req, res) => {
   return proxyJson(CREATE_FEED_API, req, res);
 });
 
-// Proxy endpoint — the months saved in the research database, which fill the
-// report page's month dropdown. Read-only; nothing is sent upstream.
-router.get('/api/report/months', (_req, res) => {
-  if (!needSetting(res, 'REPORT_MONTHS_API (or REPORT_API)', REPORT_MONTHS_API)) return;
-  return proxyGet(REPORT_MONTHS_API, res);
+// Proxy endpoint — one report for a range of dates:
+// api/report/range?from_date=2026-01-01&to_date=2026-02-01&narrative=true
+// → the FastAPI /boom-research/range-report route. Read-only; nothing is
+// uploaded or saved.
+router.get('/api/report/range', (req, res) => {
+  if (!needSetting(res, 'REPORT_RANGE_API', REPORT_RANGE_API)) return;
+  console.log(`📊 Report request → ${REPORT_RANGE_API} ${req.originalUrl.split('?')[1] || ''}`);
+  return proxyGet(REPORT_RANGE_API, req, res);
 });
 
-// Proxy endpoint — forwards the Monthly Report form (month, the narrative flag
-// and, for a month not in the database yet, the Excel file) to the FastAPI
-// /boom-research/report route. With no file the report is built from the
-// database. The global express.json() above ignores multipart bodies, so this
-// route reads its own.
-router.post(
-  '/api/report',
-  express.raw({ type: 'multipart/form-data', limit: '25mb' }),
-  (req, res) => {
-    if (!needSetting(res, 'REPORT_API', REPORT_API)) return;
-    if (!Buffer.isBuffer(req.body)) {
-      return res.status(400).json({
-        error: 'Expected a multipart/form-data form (month, narrative and maybe an Excel file).',
-      });
-    }
-    console.log(
-      `📊 Report request → ${REPORT_API} (${Math.round(req.body.length / 1024)} KB)`
-    );
-    return proxyUpload(REPORT_API, req, res);
-  }
-);
+// Proxy endpoint — the first and last dates the research database has, shown
+// under the report page's date pickers.
+router.get('/api/report/dates', (req, res) => {
+  if (!needSetting(res, 'REPORT_DATES_API (or REPORT_RANGE_API)', REPORT_DATES_API)) return;
+  return proxyGet(REPORT_DATES_API, req, res);
+});
 
 router.get('/health', (_req, res) => res.json({ ok: true }));
 
@@ -255,8 +241,8 @@ app.listen(PORT, () => {
   const shown = (value) => value || '(not set)';
   console.log(`Proxying /api/generate    → ${shown(GENERATE_API)}`);
   console.log(`Proxying /api/create-feed → ${shown(CREATE_FEED_API)}`);
-  console.log(`Proxying /api/report      → ${shown(REPORT_API)}`);
-  console.log(`Proxying /api/report/months → ${shown(REPORT_MONTHS_API)}`);
+  console.log(`Proxying /api/report/range → ${shown(REPORT_RANGE_API)}`);
+  console.log(`Proxying /api/report/dates → ${shown(REPORT_DATES_API)}`);
   console.log(`Feed category ID          → ${shown(FEED_CATEGORY_ID)}`);
   const missing = Object.keys(REQUIRED).filter((name) => !REQUIRED[name]);
   if (missing.length) {

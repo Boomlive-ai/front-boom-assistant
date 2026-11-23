@@ -14,72 +14,16 @@ body {
   width: 100%;
 }
 
-/* ---------- upload form ---------- */
-.seo-form input[type='month'],
-.seo-form input[type='file'] {
-  width: 100%;
-  border: none;
-  outline: none;
-  font: inherit;
-  font-size: 15px;
-  color: #333;
-  background: transparent;
-  padding: 4px 2px;
-}
-.seo-form input[type='file'] {
+/* ---------- date form ---------- */
+/* The date boxes take their look from style.css (.seo-form input[type='date']).
+   Each legend holds a <label>, which names its box for screen readers, and a
+   click on either opens the calendar. */
+.seo-form legend label,
+.seo-form input[type='date'] {
   cursor: pointer;
 }
 
-/* Month dropdown. style.css turns the browser's own arrow off for every
-   select, so a small chevron is drawn here — with borders, not an image, so
-   this file still has no url(). */
-.rp-select-wrap {
-  position: relative;
-}
-.rp-select-wrap::after {
-  content: '';
-  position: absolute;
-  right: 6px;
-  top: 50%;
-  width: 7px;
-  height: 7px;
-  border-right: 2px solid #666;
-  border-bottom: 2px solid #666;
-  transform: translateY(-70%) rotate(45deg);
-  pointer-events: none;
-}
-.seo-form .rp-select-wrap select {
-  padding-right: 26px;
-  text-overflow: ellipsis;
-}
-.seo-form .rp-select-wrap select:disabled {
-  color: #999;
-  cursor: progress;
-}
-
-/* "Which month?" box, shown only for "Another month". */
-.rp-other-month {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px dashed #e0e0e0;
-  font-size: 14px;
-  color: #444;
-}
-.rp-other-month[hidden] {
-  display: none;
-}
-.rp-other-month label {
-  white-space: nowrap;
-}
-.seo-form .rp-other-month input[type='month'] {
-  flex: 1;
-  min-width: 0;
-}
-
-/* Small grey line under a field; red when something went wrong. */
+/* Small grey line under the dates; red when something is wrong. */
 .rp-field-note {
   margin: 8px 0 0;
   font-size: 12.5px;
@@ -92,23 +36,12 @@ body {
 .rp-field-note.is-error {
   color: #b71c1c;
 }
-.rp-link-btn {
-  font: inherit;
-  padding: 0;
-  border: none;
-  background: none;
-  color: #2b6cff;
-  text-decoration: underline;
-  cursor: pointer;
+/* Pulled up into the gap the date boxes leave below them. */
+.rp-dates-note {
+  margin-top: -6px;
 }
-
-/* The sheet upload, while the month is already in the database. */
-.seo-form .field:disabled {
-  background: #fafafa;
-}
-.seo-form .field:disabled input[type='file'] {
-  opacity: 0.55;
-  cursor: not-allowed;
+.rp-field-note .btn {
+  margin-top: 4px;
 }
 
 .rp-error {
@@ -128,7 +61,7 @@ body {
   color: #555;
 }
 
-/* ---------- tools bar above the report ---------- */
+/* ---------- tools bar above the topic report (its link back) ---------- */
 .rp-tools {
   display: flex;
   justify-content: space-between;
@@ -139,25 +72,6 @@ body {
 }
 .rp-tools[hidden] {
   display: none;
-}
-.rp-month-switch {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 8px;
-  font-size: 13px;
-  color: #555;
-}
-.rp-month-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.rp-month-row .btn.is-current {
-  background: #1a1a1a;
-  border-color: #1a1a1a;
-  color: #fff;
-  cursor: default;
 }
 
 /* ---------- the report "paper" ---------- */

@@ -32,8 +32,8 @@ variables, so the required ones must be set (in `.env`, or on the server).
 | `SESSION_ID_EN`  | **required** for English feeds        | Hocalwire session token for English stories |
 | `SESSION_ID_HI`  | **required** for Hindi feeds          | Hocalwire session token for Hindi stories   |
 | `SESSION_ID_BN`  | **required** for Bangla feeds         | Hocalwire session token for Bangla stories  |
-| `REPORT_API`     | **required**                          | Upstream endpoint for the **Monthly Report** page (`http://127.0.0.1:8000/boom-research/report` until the VPS has the route) |
-| `REPORT_MONTHS_API` | `REPORT_API` with `/report` → `/months` | Months saved in the research database, for the report page's month dropdown |
+| `REPORT_RANGE_API` | **required**                        | FastAPI `/boom-research/range-report` for the report and topic pages (`http://127.0.0.1:8000/boom-research/range-report` until the VPS has the route) |
+| `REPORT_DATES_API` | `REPORT_RANGE_API` with `/range-report` → `/dates` | The dates the research database covers, shown under the date pickers |
 | `PORT`           | `3000`                                | Port the web UI runs on                  |
 | `BASE_PATH`      | `/front-boom-assistant`               | Extra folder path to also serve under    |
 
@@ -79,7 +79,7 @@ Two things make this work, and both must be kept:
 1. **Internal links in `public/` never start with `/`.** They are written as
    `style.css`, `script.js`, `api/generate`, `api/create-feed`, `report.html`,
    `report.css`, `report-common.js`, `report.js`, `topic.html`, `topic.js`,
-   `api/report`, `api/report/months` and `./`. A leading
+   `api/report/range`, `api/report/dates` and `./`. A leading
    slash means "go back
    to the top of the website", which on the toolbox host lands on the PHP app.
    Adding a `/` in front of any of these silently breaks the folder address.
@@ -183,59 +183,54 @@ key in the feed payload, so they are not sent.
 ## Monthly Report
 
 The **📊 Monthly Report** button in the top bar opens `report.html`, which turns
-BOOM's coded fact-check data into the monthly misinformation report, laid out
-like the PDF draft.
+BOOM's coded fact-check data (the research database, `boom_report`) into a
+misinformation report for **any range of dates**, laid out like the PDF draft.
 
-1. Pick the **Month** first. The dropdown lists every month saved in the
-   research database (`boom_report`), newest first, with its fact-check count.
-   The list comes from `api/report/months`, which `server.js` forwards to
-   `REPORT_MONTHS_API` (the FastAPI `/boom-research/months` route).
-   - A month from the list needs no file: the sheet upload stays switched off
-     and the report is built from the database.
-   - For a month that is not there, choose **Another month (upload the
-     sheet)…**, type the month, and choose the Excel sheet (`.xlsx`) that has
-     it. The API saves the sheet to the database, so afterwards its months
-     appear in the list.
-2. Click **Generate Report**. The page POSTs the month (and the file, when
-   there is one) to `api/report`, which `server.js` forwards to `REPORT_API`
-   (the FastAPI `/boom-research/report` route) unchanged.
-   The report text is **always written by AI** — there is no on/off switch —
-   so while it works the button reads "Writing the report with AI…" (about
-   15 seconds for January 2026). If the AI fails, the API falls back to
-   template text and says so in the data notes.
+1. Pick a **From Date** and a **To Date** (both days are included). They start
+   as one month up to today, for example 23-10-2026 → 23-11-2026; **Reset**
+   goes back to that. Under the boxes the page shows which dates the database
+   has (from `api/report/dates`). If your dates are all outside them, the note
+   turns red and offers a button that fills in the latest month that has data.
+2. Click **Generate Report**. The page asks
+   `api/report/range?from_date=…&to_date=…&narrative=true`, which `server.js`
+   forwards to `REPORT_RANGE_API` (the FastAPI `/boom-research/range-report`
+   route). Before asking, it checks that From is not after To and that the
+   range is at most 366 days. The report text is **always written by AI** —
+   there is no on/off switch — so while it works the button reads "Writing the
+   report with AI…" (about 15–20 seconds). If the AI fails, the API falls back
+   to template text and says so in the data notes.
 3. The report appears below: headline, stat cards, key highlights, charts
-   (months, languages, topics, a day-by-day dot timeline, targets, AI, medium /
-   intent / type), the media-misreporting table, theme assessment, data notes
-   and an appendix of every fact-check.
+   (months, languages, topics, a dot timeline of the range, targets, AI,
+   medium / intent / type), the media-misreporting table, theme assessment,
+   data notes and an appendix of every fact-check.
 
 A report starts **only when you click Generate Report** — never by itself.
-The **Other months** buttons above the report just pick that month in the form
-(and bring you back to the button); the topic page's "← January 2026 report"
-link does the same. Then click **Generate Report**. There is no Copy JSON or print / PDF button; if you print with the
-browser (Ctrl+P) anyway, only the report is printed.
+Buttons that fill in dates, and the topic page's "← … report" link, only fill
+the boxes. There is no file upload, Copy JSON or print / PDF button; if you
+print with the browser (Ctrl+P) anyway, only the report is printed.
 
 ### Topic reports
 
-Next to the report, a **Topics** sidebar lists every topic of that month, the
+Next to the report, a **Topics** sidebar lists every topic in those dates, the
 biggest first, with its number of fact-checks. Type in **Find a topic…** to
-narrow the list. Clicking a topic opens its own report in a new tab
-(`topic.html?month=2026-01&topic=Iran+unrest`):
+narrow the list. Clicking a topic opens its own report, for the same dates, in
+a new tab (`topic.html?from=2026-01-01&to=2026-02-01&topic=Iran+unrest`):
 
-- a headline and stat cards — how many fact-checks, their share of the month,
+- a headline and stat cards — how many fact-checks, their share of the range,
   and how many involved AI, old content or media misreporting;
 - a dot timeline of when they were published;
 - the split by language, medium, type of deception and intent;
 - who was targeted and who spread the claims;
 - every fact-check on the topic, with its claim.
 
-The topic page asks for the month from the database again (without AI text,
-so it takes under a second) and keeps only that topic's fact-checks. It has
-the same sidebar, so you can jump between topics, and a link back to the month
-report.
+The topic page asks for the same dates from the database again (without AI
+text, so it takes under a second) and keeps only that topic's fact-checks. It
+has the same sidebar, so you can jump between topics, and a link back to the
+report page with the dates filled in.
 
-`REPORT_API` points at `127.0.0.1:8000` in `.env.example`, because the
-deployed service has no report route yet. Change it when it does —
-`REPORT_MONTHS_API` follows it on its own when left out.
+`REPORT_RANGE_API` points at `127.0.0.1:8000` in `.env.example`, because the
+deployed service has no range-report route yet. Change it when it does —
+`REPORT_DATES_API` follows it on its own when left out.
 
 This app never connects to Postgres. The database login (`DB_HOST`,
 `DB_PASSWORD`, `RESEARCH_DB_NAME`, …) lives only in the FastAPI service's own
@@ -254,8 +249,8 @@ front-boom-assistant/
 │   ├── report.html      # Monthly Report page
 │   ├── report.css       # Report + topic layout, sidebar, charts, print styles
 │   ├── report-common.js # Helpers shared by report.js and topic.js
-│   ├── report.js        # Month dropdown, upload, report rendering
-│   ├── topic.html       # One topic's report for one month
-│   └── topic.js         # Loads the month, keeps one topic, draws it
+│   ├── report.js        # From/To dates, report rendering
+│   ├── topic.html       # One topic's report for a date range
+│   └── topic.js         # Loads the range, keeps one topic, draws it
 └── README.md
 ```

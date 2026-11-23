@@ -55,19 +55,29 @@ function shortDate(iso) {
   });
 }
 
-// "January 2026" → "January".
-const monthName = (label) => String(label || '').split(' ')[0];
-
-// "2026-01" → "January 2026". Built in UTC, like shortDate().
-function monthLabel(month) {
-  const [y, m] = String(month || '').split('-').map(Number);
-  if (!y || !m) return String(month || '');
-  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', {
-    month: 'long',
+// "2026-01-02" → "02 Jan 2026". UTC, like shortDate().
+function longDate(iso) {
+  const [y, m, d] = String(iso || '').split('-').map(Number);
+  if (!y || !m || !d) return String(iso || '');
+  return new Date(Date.UTC(y, m - 1, d)).toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
     year: 'numeric',
     timeZone: 'UTC',
   });
 }
+
+// A real YYYY-MM-DD date (not "2026-02-31").
+function isIsoDate(value) {
+  const s = String(value || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false;
+  const [y, m, d] = s.split('-').map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d));
+  return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d;
+}
+
+// "January 2026" → "January".
+const monthName = (label) => String(label || '').split(' ')[0];
 
 // ["a", "b", "c"] → "a, b and c".
 function joinAnd(list) {
@@ -200,29 +210,46 @@ const stackedGroup = (title, items) =>
     ? el('div', 'rp-stack-group', el('h4', null, title), stackedBar(items))
     : null;
 
-// Each dot is one fact-check, placed on the day it was published and stacked
-// upwards when a story had several that day. One row per theme.
-function dotTimeline(themes, days) {
-  const span = Math.max(1, days - 1);
-  const at = (day) => `${((day - 1) / span) * 100}%`;
+// Every date from `from` to `to` (YYYY-MM-DD, both included), in order —
+// the x axis of dotTimeline(). Built in UTC so no day is skipped or repeated
+// when the clocks change.
+function datesBetween(from, to) {
+  const [fy, fm, fd] = String(from).split('-').map(Number);
+  const [ty, tm, td] = String(to).split('-').map(Number);
+  const out = [];
+  const end = Date.UTC(ty, tm - 1, td);
+  for (let t = Date.UTC(fy, fm - 1, fd); t <= end && out.length < 400; t += 86400000) {
+    out.push(new Date(t).toISOString().slice(0, 10));
+  }
+  return out;
+}
+
+// Each dot is one fact-check, placed on the date it was published and stacked
+// upwards when a story had several that day. One row per theme. `dates` is
+// every date of the report, in order (datesBetween()), so a range that spans
+// two months never puts 3 February on top of 3 January.
+function dotTimeline(themes, dates) {
+  const index = new Map(dates.map((d, i) => [d, i]));
+  const span = Math.max(1, dates.length - 1);
+  const at = (i) => `${(i / span) * 100}%`;
   const wrap = el('div', 'rp-timeline');
 
   themes.forEach((theme) => {
-    const byDay = new Map();
+    const byDate = new Map();
     (theme.fact_checks || []).forEach((fc) => {
-      const day = Number(String(fc.date).slice(8, 10));
-      if (!day) return;
-      if (!byDay.has(day)) byDay.set(day, []);
-      byDay.get(day).push(fc);
+      const date = String(fc.date).slice(0, 10);
+      if (!index.has(date)) return;
+      if (!byDate.has(date)) byDate.set(date, []);
+      byDate.get(date).push(fc);
     });
-    const tallest = Math.max(1, ...[...byDay.values()].map((l) => l.length));
+    const tallest = Math.max(1, ...[...byDate.values()].map((l) => l.length));
 
     const track = el('div', 'rp-track');
     track.style.height = `${tallest * 10 + 10}px`;
-    byDay.forEach((list, day) => {
+    byDate.forEach((list, date) => {
       list.forEach((fc, i) => {
         const dot = el('span', 'rp-dot');
-        dot.style.left = at(day);
+        dot.style.left = at(index.get(date));
         dot.style.bottom = `${5 + i * 10}px`;
         dot.title = `${shortDate(fc.date)} · ${fc.language} · ${fc.headline}`;
         track.append(dot);
@@ -244,11 +271,16 @@ function dotTimeline(themes, days) {
     );
   });
 
-  // Day ticks a week apart, like the PDF: 1, 8, 15, 22, 29.
+  // Ticks a week apart, like the PDF (more weeks apart for a long range, so
+  // there are never more than about seven). Inside one calendar month they are
+  // day numbers (1, 8, 15 …), otherwise dates ("15 Feb", "22 Feb" …).
   const axis = el('div', 'rp-track rp-axis');
-  for (let day = 1; day <= days; day += 7) {
-    const tick = el('span', 'rp-tick', String(day));
-    tick.style.left = at(day);
+  const oneMonth = dates.length > 0 && dates[0].slice(0, 7) === dates[dates.length - 1].slice(0, 7);
+  const step = 7 * Math.max(1, Math.ceil(dates.length / 7 / 7));
+  for (let i = 0; i < dates.length; i += step) {
+    const text = oneMonth ? String(Number(dates[i].slice(8, 10))) : shortDate(dates[i]);
+    const tick = el('span', 'rp-tick', text);
+    tick.style.left = at(i);
     axis.append(tick);
   }
   wrap.append(el('div', 'rp-tl-row rp-tl-axis', el('div', 'rp-tl-label'), axis));
@@ -334,11 +366,11 @@ function footnote(meta, narrativeSource, label) {
 
 // ---------- topics sidebar ----------
 
-// Address of one topic's report page, e.g.
-// topic.html?month=2026-01&topic=Iran+unrest. Relative, like every internal
-// link, so it works at both addresses (see README "Two addresses").
-function topicHref(month, topic) {
-  return 'topic.html?' + new URLSearchParams({ month, topic }).toString();
+// Address of one topic's report page for the same dates, e.g.
+// topic.html?from=2026-01-01&to=2026-01-31&topic=Iran+unrest. Relative, like
+// every internal link, so it works at both addresses (see README "Two addresses").
+function topicHref(from, to, topic) {
+  return 'topic.html?' + new URLSearchParams({ from, to, topic }).toString();
 }
 
 // The sidebar's contents: every topic of the month, most fact-checks first
@@ -348,7 +380,7 @@ function topicHref(month, topic) {
 // opens the links in a new tab, so the month report stays open behind them.
 function topicSidebar(data, { current = '', newTab = false } = {}) {
   const meta = data.meta || {};
-  const label = meta.label || monthLabel(meta.month);
+  const label = meta.label || `${meta.from_date} – ${meta.to_date}`;
   const topics = (data.topics || []).filter((t) => t.topic && t.topic !== 'Uncoded');
 
   const list = el('ul', 'rp-side-list');
@@ -359,7 +391,7 @@ function topicSidebar(data, { current = '', newTab = false } = {}) {
       el('span', 'rp-side-name', t.topic),
       el('span', 'rp-side-count', String(t.count))
     );
-    a.href = topicHref(meta.month, t.topic);
+    a.href = topicHref(meta.from_date, meta.to_date, t.topic);
     a.title = `${t.topic}: ${t.count} fact-check${t.count === 1 ? '' : 's'}`;
     if (newTab) {
       a.target = '_blank';

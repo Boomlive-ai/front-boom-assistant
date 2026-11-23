@@ -1,31 +1,35 @@
-// topic.js — one topic's report for one month, opened from the topics sidebar
-// as topic.html?month=2026-01&topic=Iran%20unrest.
+// topic.js — one topic's report for the same dates as the report it came
+// from, opened from the topics sidebar as
+// topic.html?from=2026-01-01&to=2026-01-31&topic=Iran%20unrest.
 //
-// There is no separate "topic" API: the page asks api/report for the whole
-// month (from the database, without AI text, so it is quick and free) and
-// keeps only the fact-checks coded under this topic. Every figure below is
+// There is no separate "topic" API: the page asks api/report/range for the
+// whole range (from the database, without AI text, so it is quick and free)
+// and keeps only the fact-checks coded under this topic. Every figure below is
 // counted from those fact-checks, in the browser.
 //
-// report-common.js is loaded first and supplies el(), the chart pieces and the
-// sidebar.
+// report-common.js is loaded first and supplies el(), the chart pieces, the
+// date helpers and the sidebar.
 
 const statusBox = document.getElementById('topic-status');
 const layout = document.getElementById('topic-layout');
 const topicNav = document.getElementById('topic-nav');
 const tools = document.getElementById('topic-tools');
-const monthLink = document.getElementById('month-link');
+const backLink = document.getElementById('month-link');
 const report = document.getElementById('report');
 
 const params = new URLSearchParams(location.search);
-const month = (params.get('month') || '').trim();
+const fromDate = (params.get('from') || '').trim();
+const toDate = (params.get('to') || '').trim();
 const topic = (params.get('topic') || '').trim();
+// "02 Jan 2026 – 31 Jan 2026", for messages shown before the reply arrives.
+const datesText = `${longDate(fromDate)} – ${longDate(toDate)}`;
 
 // ---------- small helpers ----------
 
 // The grey box above the report: a loading line, or what went wrong. `extra`
 // is more nodes to add under the message, such as a link.
 function showStatus(message, isError = false, ...extra) {
-  statusBox.replaceChildren(el('p', null, message), ...extra);
+  statusBox.replaceChildren(el('p', null, message), ...extra.filter(Boolean));
   statusBox.classList.toggle('is-error', isError);
   statusBox.hidden = false;
 }
@@ -46,34 +50,24 @@ function countBy(factChecks, pick) {
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
 }
 
-// "2026-02" → 28.
-function daysInMonth(ym) {
-  const [y, m] = ym.split('-').map(Number);
-  return new Date(Date.UTC(y, m, 0)).getUTCDate();
-}
-
 // "1 fact-check" / "12 fact-checks".
 const factChecksWord = (n) => `${n} fact-check${n === 1 ? '' : 's'}`;
 
 // ---------- the topic report ----------
 
-function topicStatCards(n, total, label, counts) {
+function topicStatCards(n, total, counts) {
   const ofThem = (k) => `${pct((k / n) * 100)} of them`;
   return el(
     'div',
     'rp-stats',
-    statCard(
-      'Fact-checks published',
-      n,
-      `${pct((n / total) * 100)} of ${monthName(label)}'s ${total}`
-    ),
+    statCard('Fact-checks published', n, `${pct((n / total) * 100)} of all ${total} in these dates`),
     statCard('Involved AI', counts.ai, ofThem(counts.ai)),
     statCard('Recycled old content', counts.old, ofThem(counts.old)),
     statCard('Media misreporting', counts.media, ofThem(counts.media))
   );
 }
 
-// The theme assessment's text when the month report has one for this topic
+// The theme assessment's text when the report has one for this topic
 // (only the biggest topics get one); otherwise a sentence built the same way.
 function topicSummary(theme, n, counts) {
   if (theme && theme.summary) return theme.summary;
@@ -96,14 +90,19 @@ function topicSummary(theme, n, counts) {
 
 function renderTopic(data) {
   const meta = data.meta || {};
-  const label = meta.label || monthLabel(month);
+  // "January 2026" for a whole month, otherwise "15 February – 20 March 2026".
+  const label = meta.label || datesText;
   const all = data.fact_checks || [];
   const total = (data.summary && data.summary.fact_checks) || all.length;
+  // Every date of the range, in order: the x axis of the dot timeline.
+  const daily = data.daily || [];
+  const dates = daily.length ? daily.map((d) => d.date) : datesBetween(fromDate, toDate);
 
-  // The same topics list as on the month page, with this topic marked.
+  // The same topics list as on the report page, with this topic marked.
   showTopicSidebar(topicNav, layout, data, { current: topic });
-  monthLink.href = 'report.html?' + new URLSearchParams({ month }).toString();
-  monthLink.textContent = `← ${label} report`;
+  // Back to the report page with these dates filled in (not started).
+  backLink.href = 'report.html?' + new URLSearchParams({ from: fromDate, to: toDate }).toString();
+  backLink.textContent = `← ${label} report`;
   tools.hidden = false;
 
   const fcs = all
@@ -141,22 +140,22 @@ function renderTopic(data) {
     el(
       'p',
       'rp-standfirst',
-      `BOOM published ${factChecksWord(n)} on ${topic} in ${label} — ${pct((n / total) * 100)} of the month's ${total} — ${when}.`
+      `BOOM published ${factChecksWord(n)} on ${topic} ${meta.whole_month ? 'in' : 'during'} ${label} — ${pct((n / total) * 100)} of all ${total} in these dates — ${when}.`
     ),
     el(
       'p',
       'rp-period',
       `Based on BOOM's coded fact-check database${languages.length ? ` (${joinAnd(languages.map((l) => l.label))})` : ''}`
     ),
-    topicStatCards(n, total, label, counts),
+    topicStatCards(n, total, counts),
     section(
       'Overview',
       ...paragraphs(topicSummary(theme, n, counts)),
       chartCard(
         'When the fact-checks were published',
         'Each dot is one fact-check, placed on the day it was published. Hover a dot for its headline.',
-        dotTimeline([{ topic, count: n, fact_checks: fcs }], daysInMonth(month)),
-        el('p', 'rp-axis-title', `Day of ${label}`)
+        dotTimeline([{ topic, count: n, fact_checks: fcs }], dates),
+        el('p', 'rp-axis-title', meta.whole_month ? `Day of ${label}` : `Date, ${label}`)
       )
     ),
     // With one fact-check every bar would be 100%, so the breakdowns wait for two.
@@ -222,32 +221,29 @@ function renderTopic(data) {
 // ---------- load ----------
 
 async function loadTopic() {
-  const back = el('a', 'rp-link', 'Go to the Monthly Report page');
+  const back = el('a', 'rp-link', 'Go to the report page');
   back.href = 'report.html';
 
-  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || !topic) {
+  if (!isIsoDate(fromDate) || !isIsoDate(toDate) || fromDate > toDate || !topic) {
     showStatus(
-      'This link is missing the month or the topic. Open a topic from the sidebar of a monthly report.',
+      'This link is missing the dates or the topic. Open a topic from the sidebar of a report.',
       true,
       el('p', null, back)
     );
     return;
   }
 
-  document.title = `BOOM Topic Report ${topic} ${monthLabel(month)}`;
-  showStatus(`Loading ${topic} · ${monthLabel(month)}…`);
+  document.title = `BOOM Topic Report ${topic} ${datesText}`;
+  showStatus(`Loading ${topic} · ${datesText}…`);
 
-  // Same request as the Monthly Report page, minus the file: the API builds
-  // the month from the database. narrative=false keeps it quick and free.
-  const body = new FormData();
-  body.append('month', month);
-  body.append('narrative', 'false');
+  // Same route as the report page, for the same dates. narrative=false: this
+  // page shows only counts, so there is no AI call — it is quick and free.
+  const query = new URLSearchParams({ from_date: fromDate, to_date: toDate, narrative: 'false' });
 
   try {
-    const res = await fetch('api/report', {
-      method: 'POST',
+    // Relative on purpose — see README "Two addresses".
+    const res = await fetch(`api/report/range?${query}`, {
       headers: { accept: 'application/json' },
-      body,
     });
     const text = await res.text();
     let data;
@@ -261,7 +257,7 @@ async function loadTopic() {
   } catch (err) {
     console.error(err);
     showStatus(
-      `Could not load ${monthLabel(month)} from the database: ${err.message || 'Request failed'}`,
+      `Could not load ${datesText} from the database: ${err.message || 'Request failed'}`,
       true,
       el('p', null, back)
     );
