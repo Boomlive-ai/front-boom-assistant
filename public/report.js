@@ -491,9 +491,9 @@ function renderReport(data) {
 
 /* ==========================================================================
    Make a Story — turns the report on the page into a createFeedV2 story and
-   POSTs it through api/report/story, which adds the S-id key from the
-   server's settings (no sessionId is sent). Nothing here asks for a new
-   report: the story is the report that is already on the page.
+   POSTs it through api/report/story, which adds the S-id key and the session
+   token from the server's settings. Nothing here asks for a new report: the
+   story is the report that is already on the page.
    ========================================================================== */
 
 // Fixed values the CMS needs that the report has no data for. These are the
@@ -718,10 +718,10 @@ function blocksHtml(node, out) {
 // of the sample's `story`.
 const reportStoryHtml = () => blocksHtml(report, []).filter(Boolean).join('\n');
 
-// The createFeedV2 body, shaped like the sample — {language, state,
-// news: [story]} — but with no sessionId anywhere: this API is signed in by
-// the S-id header, which api/report/story adds (with the category, if one is
-// set). Every other key of the sample is always sent, even when it is blank.
+// The createFeedV2 body, shaped like the sample: {language, sessionId, state,
+// news: [story]}. sessionId (and categoryId) leave the page blank on purpose —
+// api/report/story fills them in from the server's settings, and adds the
+// S-id header. Every key of the sample is always sent, even when it is blank.
 // `data` is the reply behind the report on the page; the story's text is read
 // from the page itself (reportStoryHtml), which renderReport() drew from it.
 function buildStoryPayload(data) {
@@ -802,8 +802,9 @@ function buildStoryPayload(data) {
     read_duration: `${Math.round(readSec / 60)} ${t.readUnit}`,
     reviewed_by: 'BOOM',
     seo_description: truncate(standfirst, 160),
-    // No sessionId key, here or at the top: this API is signed in by the S-id
-    // header alone, which api/report/story adds.
+    // Blank here, as in the sample; the real token goes in the top-level
+    // sessionId, which api/report/story fills in.
+    sessionId: '',
     show_claim_review: false,
     show_fast_check: false,
     state: 'SUBMITTED',
@@ -820,7 +821,8 @@ function buildStoryPayload(data) {
     video_duration: '',
   };
 
-  return { language: 'en', state: 'SUBMITTED', news: [news] };
+  // sessionId leaves the page blank: api/report/story puts the token in.
+  return { language: 'en', sessionId: '', state: 'SUBMITTED', news: [news] };
 }
 
 function setStoryLoading(loading) {
@@ -854,11 +856,11 @@ storyBtn.addEventListener('click', async () => {
   const payload = buildStoryPayload(currentReport);
 
   // Printed to the browser console (F12 → Console) so it is clear what left the
-  // page. The S-id key (and the category, if set) is added by the server, and
-  // the terminal running the server prints it, masked.
+  // page. sessionId is blank here on purpose: the server adds it, the S-id key
+  // and the category (if set), and the terminal running it prints them masked.
   console.log('📰 Make a Story — sending request with config:');
   console.log('👉 URL:', new URL('api/report/story', location.href).href);
-  console.log('👉 S-id / CategoryId:', '(added by the server, from .env)');
+  console.log('👉 S-id / SessionId / CategoryId:', '(added by the server, from .env)');
   console.log('👉 Payload:', JSON.stringify(payload, null, 2));
 
   setStoryLoading(true);

@@ -35,7 +35,8 @@ variables, so the required ones must be set (in `.env`, or on the server).
 | `REPORT_RANGE_API` | **required**                        | FastAPI `/boom-research/range-report` for the report and topic pages (`http://127.0.0.1:8000/boom-research/range-report` until the VPS has the route) |
 | `REPORT_DATES_API` | `REPORT_RANGE_API` with `/range-report` → `/dates` | The dates the research database covers, shown under the date pickers |
 | `REPORT_STORY_API` | **required**                        | Hocalwire `createFeedV2` for the report page's **Make a Story** (`https://www.boomlive.in/dev/h-api/createFeedV2`) |
-| `REPORT_STORY_SID` | **required** for Make a Story       | Key sent in the `S-id` request header (the only sign-in; no `sessionId` is sent) |
+| `REPORT_STORY_SID` | **required** for Make a Story       | Key sent in the `S-id` request header      |
+| `REPORT_STORY_SESSION_ID` | **required** for Make a Story | Session token put into the story body's `sessionId` (without it the API answers 401) |
 | `REPORT_STORY_CATEGORY_ID` | optional (blank = `""`)    | CMS section report stories are filed under |
 | `PORT`           | `3000`                                | Port the web UI runs on                  |
 | `BASE_PATH`      | `/front-boom-assistant`               | Extra folder path to also serve under    |
@@ -223,12 +224,13 @@ be checked there before it goes live. It uses the report already on the page —
 it does not ask the AI again.
 
 1. The page builds the body in the shape of the API's sample,
-   `{language, state, news: [story]}`, and POSTs it to `api/report/story`.
-   No `sessionId` is sent, at the top or in the story: the API is signed in
-   by the `S-id` header alone.
-2. `server.js` adds the `S-id` header (`REPORT_STORY_SID`) and, if set, the
-   category, then forwards it to `REPORT_STORY_API`. So the key is never in
-   the page.
+   `{language, sessionId, state, news: [story]}`, with `sessionId` blank, and
+   POSTs it to `api/report/story`.
+2. `server.js` adds the `S-id` header (`REPORT_STORY_SID`), puts the session
+   token (`REPORT_STORY_SESSION_ID`) into the top-level `sessionId` and, if
+   set, the category into the story, then forwards it to `REPORT_STORY_API`.
+   So no key or token is ever in the page. The API needs both credentials:
+   without the session token it answers `401`.
 3. Success shows `✅ Story created successfully! (ID: …)`; a failure shows the
    error in red.
 
@@ -260,7 +262,7 @@ guesses worth checking with the CMS team: `classification` is still
 `FACT_CHECK` (the only value known to work) and `news_label` is `Report`.
 
 Pressing the button logs the payload in the browser console (F12), and the
-terminal running the server logs the address with the key masked.
+terminal running the server logs the address with the key and token masked.
 
 ### Topic reports
 
