@@ -490,10 +490,11 @@ function renderReport(data) {
 }
 
 /* ==========================================================================
-   Make a Story — turns the report on the page into a createFeedV2 story and
-   POSTs it through api/report/story, which adds the S-id key and the session
-   token from the server's settings. Nothing here asks for a new report: the
-   story is the report that is already on the page.
+   Make a Story — turns the report on the page into a createFeedV2 payload and
+   POSTs it through api/create-feed, the main page's Create Feed route, which
+   adds the session token and the category from the server's settings.
+   Nothing here asks for a new report: the story is the report that is
+   already on the page.
    ========================================================================== */
 
 // Fixed values the CMS needs that the report has no data for. These are the
@@ -718,10 +719,12 @@ function blocksHtml(node, out) {
 // of the sample's `story`.
 const reportStoryHtml = () => blocksHtml(report, []).filter(Boolean).join('\n');
 
-// The createFeedV2 body, shaped like the sample: {language, sessionId, state,
-// news: [story]}. sessionId (and categoryId) leave the page blank on purpose —
-// api/report/story fills them in from the server's settings, and adds the
-// S-id header. Every key of the sample is always sent, even when it is blank.
+// The createFeedV2 payload: one flat object, the same shape (and the same
+// keys) as the main page's Create Feed sends, because it goes through the same
+// route, api/create-feed → CREATE_FEED_API. sessionId and categoryId leave the
+// page blank on purpose — that route fills them in from the server's settings
+// (SESSION_ID_EN, since the report is English, and FEED_CATEGORY_ID). Every
+// key is always sent, even when it is blank.
 // `data` is the reply behind the report on the page; the story's text is read
 // from the page itself (reportStoryHtml), which renderReport() drew from it.
 function buildStoryPayload(data) {
@@ -742,11 +745,12 @@ function buildStoryPayload(data) {
   const reportKind = meta.whole_month ? 'Monthly Report' : 'Report';
   const caption = `BOOM misinformation report, ${label}`;
 
-  const news = {
+  return {
     ReviewBoxcheckbox_2: true,
     ReviewBoximage_advanced_5: '',
     articletype: t.articleType,
     avatarId: 1,
+    // Empty like sessionId below: api/create-feed fills both in.
     categoryId: '',
     // A report has no single claim or verdict, so the claim fields are blank
     // and the claim-review and fast-check boxes are switched off below.
@@ -771,16 +775,16 @@ function buildStoryPayload(data) {
     highlight_icon: 'flag',
     highlights: textList(n.key_highlights),
     highlights_heading: t.highlightsHeading,
-    // Lists, as in the sample for this API (the main page's Create Feed sends
-    // these two as comma-separated text instead, for its own endpoint).
+    // One comma-separated string each, as the main page's Create Feed sends
+    // them to this endpoint: keywords spaced after the comma, tags not.
     keywords: cleanList(
       `BOOM ${reportKind.toLowerCase()}`,
       `misinformation ${label}`,
       `fact-checks ${label}`,
       topTopics,
       data.ai && data.ai.count ? 'AI misinformation' : []
-    ),
-    tags: cleanList('Misinformation', reportKind, topTopics),
+    ).join(', '),
+    tags: cleanList('Misinformation', reportKind, topTopics).join(','),
     // No interview in a report.
     interview_ans: [],
     interview_check: false,
@@ -802,8 +806,8 @@ function buildStoryPayload(data) {
     read_duration: `${Math.round(readSec / 60)} ${t.readUnit}`,
     reviewed_by: 'BOOM',
     seo_description: truncate(standfirst, 160),
-    // Blank here, as in the sample; the real token goes in the top-level
-    // sessionId, which api/report/story fills in.
+    // Left empty on purpose. The session token is a credential, so it lives in
+    // the server's settings: api/create-feed picks the one for `language`.
     sessionId: '',
     show_claim_review: false,
     show_fast_check: false,
@@ -820,9 +824,6 @@ function buildStoryPayload(data) {
     // No video in a report.
     video_duration: '',
   };
-
-  // sessionId leaves the page blank: api/report/story puts the token in.
-  return { language: 'en', sessionId: '', state: 'SUBMITTED', news: [news] };
 }
 
 function setStoryLoading(loading) {
@@ -856,17 +857,20 @@ storyBtn.addEventListener('click', async () => {
   const payload = buildStoryPayload(currentReport);
 
   // Printed to the browser console (F12 → Console) so it is clear what left the
-  // page. sessionId is blank here on purpose: the server adds it, the S-id key
-  // and the category (if set), and the terminal running it prints them masked.
+  // page. sessionId and categoryId are blank here on purpose — the server adds
+  // them — and the terminal running the server prints those two.
   console.log('📰 Make a Story — sending request with config:');
-  console.log('👉 URL:', new URL('api/report/story', location.href).href);
-  console.log('👉 S-id / SessionId / CategoryId:', '(added by the server, from .env)');
+  console.log('👉 Language:', payload.language);
+  console.log('👉 URL:', new URL('api/create-feed', location.href).href);
+  console.log('👉 SessionId:', '(added by the server, from .env)');
+  console.log('👉 CategoryId:', '(added by the server, from .env)');
   console.log('👉 Payload:', JSON.stringify(payload, null, 2));
 
   setStoryLoading(true);
   try {
-    // Relative on purpose — see README "Two addresses".
-    const res = await fetch('api/report/story', {
+    // The same route as the main page's Create Feed. Relative on purpose —
+    // see README "Two addresses".
+    const res = await fetch('api/create-feed', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', accept: 'application/json' },
       body: JSON.stringify(payload),

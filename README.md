@@ -27,17 +27,13 @@ variables, so the required ones must be set (in `.env`, or on the server).
 | Var           | Required? / default                    | Purpose                                  |
 |---------------|----------------------------------------|------------------------------------------|
 | `GENERATE_API`   | **required**                          | Upstream FastAPI `/generate` endpoint (main page) |
-| `CREATE_FEED_API`| **required**                          | Hocalwire `createFeedV2` endpoint for **Create Feed** |
+| `CREATE_FEED_API`| **required**                          | Hocalwire `createFeedV2` endpoint for **Create Feed** and the report page's **Make a Story** |
 | `FEED_CATEGORY_ID`| **required**                         | Hocalwire section new feeds are filed under (`796`) |
-| `SESSION_ID_EN`  | **required** for English feeds        | Hocalwire session token for English stories |
+| `SESSION_ID_EN`  | **required** for English feeds        | Hocalwire session token for English stories (and for Make a Story — reports are English) |
 | `SESSION_ID_HI`  | **required** for Hindi feeds          | Hocalwire session token for Hindi stories   |
 | `SESSION_ID_BN`  | **required** for Bangla feeds         | Hocalwire session token for Bangla stories  |
 | `REPORT_RANGE_API` | **required**                        | FastAPI `/boom-research/range-report` for the report and topic pages (`http://127.0.0.1:8000/boom-research/range-report` until the VPS has the route) |
 | `REPORT_DATES_API` | `REPORT_RANGE_API` with `/range-report` → `/dates` | The dates the research database covers, shown under the date pickers |
-| `REPORT_STORY_API` | **required**                        | Hocalwire `createFeedV2` for the report page's **Make a Story** (`https://www.boomlive.in/dev/h-api/createFeedV2`) |
-| `REPORT_STORY_SID` | **required** for Make a Story       | Key sent in the `S-id` request header      |
-| `REPORT_STORY_SESSION_ID` | **required** for Make a Story | Session token put into the story body's `sessionId` (without it the API answers 401) |
-| `REPORT_STORY_CATEGORY_ID` | optional (blank = `""`)    | CMS section report stories are filed under |
 | `PORT`           | `3000`                                | Port the web UI runs on                  |
 | `BASE_PATH`      | `/front-boom-assistant`               | Extra folder path to also serve under    |
 
@@ -83,7 +79,7 @@ Two things make this work, and both must be kept:
 1. **Internal links in `public/` never start with `/`.** They are written as
    `style.css`, `script.js`, `api/generate`, `api/create-feed`, `report.html`,
    `report.css`, `report-common.js`, `report.js`, `topic.html`, `topic.js`,
-   `api/report/range`, `api/report/dates`, `api/report/story` and `./`. A leading
+   `api/report/range`, `api/report/dates` and `./`. A leading
    slash means "go back
    to the top of the website", which on the toolbox host lands on the PHP app.
    Adding a `/` in front of any of these silently breaks the folder address.
@@ -223,14 +219,13 @@ in the CMS (Hocalwire `createFeedV2`), with the state **Submitted**, so it can
 be checked there before it goes live. It uses the report already on the page —
 it does not ask the AI again.
 
-1. The page builds the body in the shape of the API's sample,
-   `{language, sessionId, state, news: [story]}`, with `sessionId` blank, and
-   POSTs it to `api/report/story`.
-2. `server.js` adds the `S-id` header (`REPORT_STORY_SID`), puts the session
-   token (`REPORT_STORY_SESSION_ID`) into the top-level `sessionId` and, if
-   set, the category into the story, then forwards it to `REPORT_STORY_API`.
-   So no key or token is ever in the page. The API needs both credentials:
-   without the session token it answers `401`.
+1. The page builds **one flat payload, exactly like the main page's Create
+   Feed** (`{ReviewBoxcheckbox_2, …, heading, story, …, video_duration}`, with
+   `language: "en"` and `sessionId` / `categoryId` blank), and POSTs it to
+   `api/create-feed` — the same route Create Feed uses.
+2. `server.js` fills in `sessionId` (from `SESSION_ID_EN`) and `categoryId`
+   (from `FEED_CATEGORY_ID`, `796`), then forwards it to `CREATE_FEED_API`.
+   So no token is ever in the page, and there is nothing extra to configure.
 3. Success shows `✅ Story created successfully! (ID: …)`; a failure shows the
    error in red.
 
@@ -242,14 +237,14 @@ What goes where:
 | `description`, `seo_description` | the standfirst (the SEO one cut to 160 characters) |
 | `highlights` | the key highlights |
 | `story` | **the whole report**, as HTML (see below) |
-| `keywords`, `tags` | the dates and the top 5 topics |
+| `keywords`, `tags` | the dates and the top 5 topics, each as one comma-separated string (like Create Feed) |
 | `news_read_time_sec`, `read_duration` | counted from the story's length |
 
 `story` is the report exactly as the page shows it, top to bottom — the
 masthead, kicker, standfirst and period line, the stat cards, key highlights,
 every section with its charts, the theme assessment, the data notes, the
 appendix of every fact-check and the footnote. It uses only plain tags, like
-the API's sample: section titles are `<h4>`, text is `<p>`, and since a story
+a fact-check's story: section titles are `<h4>`, text is `<p>`, and since a story
 cannot hold a chart, each chart becomes the list of its numbers
 (`<li>Hindi: 48.8% (59)</li>`) and each table a list with its cells joined by
 ` · `. Links to fact-checks stay links. Only the headline is left out (it is
@@ -262,7 +257,8 @@ guesses worth checking with the CMS team: `classification` is still
 `FACT_CHECK` (the only value known to work) and `news_label` is `Report`.
 
 Pressing the button logs the payload in the browser console (F12), and the
-terminal running the server logs the address with the key and token masked.
+terminal running the server logs it too, with the session token masked — the
+same lines as Create Feed.
 
 ### Topic reports
 

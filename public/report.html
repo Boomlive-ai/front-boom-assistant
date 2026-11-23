@@ -73,10 +73,10 @@
           <article id="report" class="card report" hidden></article>
 
           <!-- Make a Story — shown under each report. report.js builds a
-               createFeedV2 story from the report and POSTs it through the
-               api/report/story proxy, which adds the key and session token.
-               The feed-* classes come from style.css (the main page's
-               Create Feed box). -->
+               createFeedV2 payload from the report and POSTs it through the
+               api/create-feed proxy (the main page's Create Feed route), which
+               adds the session token and the category. The feed-* classes
+               come from style.css (the main page's Create Feed box). -->
           <section id="story-box" class="card rp-story no-print" hidden>
             <div class="feed-box">
               <h3>Make a Story</h3>
