@@ -13,6 +13,29 @@ function showToast(msg, isError = false) {
   setTimeout(() => toast.classList.remove('show'), 2400);
 }
 
+// A round ↑ button in the bottom-right corner. It appears once the page has
+// been scrolled down a little more than half a screen, and a click scrolls
+// back to the top. Both pages call it once when they start (it builds the
+// button itself, so neither HTML file needs one); it is never printed.
+function addBackToTop() {
+  const btn = el('button', 'rp-top-btn no-print', '↑');
+  btn.type = 'button';
+  btn.title = 'Back to top';
+  btn.setAttribute('aria-label', 'Back to top');
+
+  btn.addEventListener('click', () => {
+    // No sliding for people who have asked their computer for less motion.
+    const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    window.scrollTo({ top: 0, behavior: reduce ? 'auto' : 'smooth' });
+  });
+
+  const update = () => btn.classList.toggle('is-visible', window.scrollY > window.innerHeight * 0.6);
+  window.addEventListener('scroll', update, { passive: true });
+  window.addEventListener('resize', update, { passive: true });
+  document.body.append(btn);
+  update();
+}
+
 // Builds one element. Strings are added as text, never as HTML, so nothing
 // from the sheet or the API can inject markup — the same rule as script.js.
 // null / false children are skipped, so `cond && el(…)` can be passed in.

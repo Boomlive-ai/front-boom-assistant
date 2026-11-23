@@ -1003,3 +1003,5 @@ if (isIsoDate(startFrom) && isIsoDate(startTo) && startFrom <= startTo) {
 }
 linkDateLimits();
 loadDataSpan();
+// The ↑ button that appears once the long report is scrolled down.
+addBackToTop();

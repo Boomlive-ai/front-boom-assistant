@@ -74,6 +74,47 @@ body {
   display: none;
 }
 
+/* ---------- back-to-top button (addBackToTop in report-common.js) ---------- */
+/* Hidden (and out of the Tab order, through visibility) until the page has
+   been scrolled down; then it fades in. Brand red, like Generate Report. */
+.rp-top-btn {
+  position: fixed;
+  right: 20px;
+  bottom: 24px;
+  z-index: 900;
+  width: 46px;
+  height: 46px;
+  border: none;
+  border-radius: 50%;
+  background: #ee3124;
+  color: #fff;
+  font: 700 22px/1 system-ui, sans-serif;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(10px);
+  transition: opacity 0.2s, transform 0.2s, visibility 0.2s, background 0.15s;
+}
+.rp-top-btn.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+}
+.rp-top-btn:hover {
+  background: #d02a1e;
+}
+.rp-top-btn:focus-visible {
+  outline: 3px solid #1a1a1a;
+  outline-offset: 3px;
+}
+@media (max-width: 600px) {
+  .rp-top-btn {
+    right: 14px;
+    bottom: 16px;
+  }
+}
+
 /* ---------- Make a Story, under the report ---------- */
 /* The box inside takes its look from style.css (.feed-box, the main page's
    Create Feed box); the card around it only needs less padding than a page. */

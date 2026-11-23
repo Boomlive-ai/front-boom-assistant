@@ -265,3 +265,5 @@ async function loadTopic() {
 }
 
 loadTopic();
+// The ↑ button that appears once the page is scrolled down.
+addBackToTop();

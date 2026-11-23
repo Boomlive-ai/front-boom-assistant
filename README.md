@@ -212,6 +212,10 @@ Buttons that fill in dates, and the topic page's "← … report" link, only fil
 the boxes. There is no file upload, Copy JSON or print / PDF button; if you
 print with the browser (Ctrl+P) anyway, only the report is printed.
 
+Once you scroll down a long report, a round red **↑** button appears in the
+bottom-right corner; click it to jump back to the top. The topic pages have it
+too.
+
 ### Make a Story
 
 The **📝 Make a Story** button under each report turns that report into a story
