@@ -74,6 +74,16 @@ body {
   display: none;
 }
 
+/* ---------- Make a Story, under the report ---------- */
+/* The box inside takes its look from style.css (.feed-box, the main page's
+   Create Feed box); the card around it only needs less padding than a page. */
+.rp-story {
+  padding: 20px 24px;
+}
+.rp-story .feed-box {
+  margin-top: 0;
+}
+
 /* ---------- the report "paper" ---------- */
 .report {
   padding: 40px 52px 44px;

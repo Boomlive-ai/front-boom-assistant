@@ -71,6 +71,28 @@
         <div class="rp-main">
           <!-- Drawn by renderReport() in report.js from the api/report/range reply. -->
           <article id="report" class="card report" hidden></article>
+
+          <!-- Make a Story — shown under each report. report.js builds a
+               createFeedV2 story from the report and POSTs it through the
+               api/report/story proxy, which adds the key and session token.
+               The feed-* classes come from style.css (the main page's
+               Create Feed box). -->
+          <section id="story-box" class="card rp-story no-print" hidden>
+            <div class="feed-box">
+              <h3>Make a Story</h3>
+              <p class="feed-note">
+                Sends this report to the CMS as a new story, with the state
+                Submitted, so it can be checked there before it goes live.
+              </p>
+              <div class="feed-actions">
+                <button type="button" id="story-btn" class="btn feed-main">
+                  <span class="btn-label">📝 Make a Story</span>
+                  <span class="spinner" aria-hidden="true"></span>
+                </button>
+              </div>
+              <pre id="story-result" class="feed-result" role="status" hidden></pre>
+            </div>
+          </section>
         </div>
       </div>
 

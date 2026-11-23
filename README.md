@@ -34,6 +34,10 @@ variables, so the required ones must be set (in `.env`, or on the server).
 | `SESSION_ID_BN`  | **required** for Bangla feeds         | Hocalwire session token for Bangla stories  |
 | `REPORT_RANGE_API` | **required**                        | FastAPI `/boom-research/range-report` for the report and topic pages (`http://127.0.0.1:8000/boom-research/range-report` until the VPS has the route) |
 | `REPORT_DATES_API` | `REPORT_RANGE_API` with `/range-report` → `/dates` | The dates the research database covers, shown under the date pickers |
+| `REPORT_STORY_API` | **required**                        | Hocalwire `createFeedV2` for the report page's **Make a Story** (`https://www.boomlive.in/dev/h-api/createFeedV2`) |
+| `REPORT_STORY_SID` | **required** for Make a Story       | Key sent in the `S-id` request header      |
+| `REPORT_STORY_SESSION_ID` | **required** for Make a Story | Session token put into the story body's `sessionId` |
+| `REPORT_STORY_CATEGORY_ID` | optional (blank = `""`)    | CMS section report stories are filed under |
 | `PORT`           | `3000`                                | Port the web UI runs on                  |
 | `BASE_PATH`      | `/front-boom-assistant`               | Extra folder path to also serve under    |
 
@@ -79,7 +83,7 @@ Two things make this work, and both must be kept:
 1. **Internal links in `public/` never start with `/`.** They are written as
    `style.css`, `script.js`, `api/generate`, `api/create-feed`, `report.html`,
    `report.css`, `report-common.js`, `report.js`, `topic.html`, `topic.js`,
-   `api/report/range`, `api/report/dates` and `./`. A leading
+   `api/report/range`, `api/report/dates`, `api/report/story` and `./`. A leading
    slash means "go back
    to the top of the website", which on the toolbox host lands on the PHP app.
    Adding a `/` in front of any of these silently breaks the folder address.
@@ -204,10 +208,49 @@ misinformation report for **any range of dates**, laid out like the PDF draft.
    medium / intent / type), the media-misreporting table, theme assessment,
    data notes and an appendix of every fact-check.
 
+4. Under the report, **📝 Make a Story** sends it to the CMS as a new story
+   (see below).
+
 A report starts **only when you click Generate Report** — never by itself.
 Buttons that fill in dates, and the topic page's "← … report" link, only fill
 the boxes. There is no file upload, Copy JSON or print / PDF button; if you
 print with the browser (Ctrl+P) anyway, only the report is printed.
+
+### Make a Story
+
+The **📝 Make a Story** button under each report turns that report into a story
+in the CMS (Hocalwire `createFeedV2`), with the state **Submitted**, so it can
+be checked there before it goes live. It uses the report already on the page —
+it does not ask the AI again.
+
+1. The page builds the body in the shape of the API's sample,
+   `{language, sessionId, state, news: [story]}`, and POSTs it to
+   `api/report/story`.
+2. `server.js` adds the `S-id` header (`REPORT_STORY_SID`), the session token
+   (`REPORT_STORY_SESSION_ID`) and, if set, the category, then forwards it to
+   `REPORT_STORY_API`. So no key or token is ever in the page.
+3. Success shows `✅ Story created successfully! (ID: …)`; a failure shows the
+   error in red.
+
+What goes where:
+
+| Story field | From the report |
+|---|---|
+| `heading` | the report's headline |
+| `description`, `seo_description` | the standfirst (the SEO one cut to 160 characters) |
+| `highlights` | the key highlights |
+| `story` | the report's text as HTML: standfirst, key highlights, overview, top topics, targets, AI, news media and theme assessment (with links to the fact-checks). The data notes stay on the page — they are for editors, not readers |
+| `keywords`, `tags` | the dates and the top 5 topics |
+| `news_read_time_sec`, `read_duration` | counted from the story's length |
+
+A report has no single claim, verdict, interview or video, so those fields are
+sent blank and the claim-review, fast-check and interview boxes are switched
+off. The fixed values are in `STORY_TEXT` in `public/report.js`. Two are
+guesses worth checking with the CMS team: `classification` is still
+`FACT_CHECK` (the only value known to work) and `news_label` is `Report`.
+
+Pressing the button logs the payload in the browser console (F12), and the
+terminal running the server logs the address with the key and token masked.
 
 ### Topic reports
 
@@ -249,7 +292,7 @@ front-boom-assistant/
 │   ├── report.html      # Monthly Report page
 │   ├── report.css       # Report + topic layout, sidebar, charts, print styles
 │   ├── report-common.js # Helpers shared by report.js and topic.js
-│   ├── report.js        # From/To dates, report rendering
+│   ├── report.js        # From/To dates, report rendering, Make a Story
 │   ├── topic.html       # One topic's report for a date range
 │   └── topic.js         # Loads the range, keeps one topic, draws it
 └── README.md

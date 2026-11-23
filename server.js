@@ -87,13 +87,25 @@ const SESSION_IDS = {
 // the page that nobody ever changed, so it is a setting, like the tokens.
 const FEED_CATEGORY_ID = setting('FEED_CATEGORY_ID');
 
+// The report page's Make a Story button: a second createFeedV2 address, which
+// turns the report into a story in the CMS. It wants its own key in an `S-id`
+// header and its own session token, so both are settings — credentials, like
+// the tokens above, and stamped in by /api/report/story, never sent from the
+// page. The category is optional: blank sends "" (as the sample payload does).
+const REPORT_STORY_API = setting('REPORT_STORY_API');
+const REPORT_STORY_SID = setting('REPORT_STORY_SID');
+const REPORT_STORY_SESSION_ID = setting('REPORT_STORY_SESSION_ID');
+const REPORT_STORY_CATEGORY_ID = setting('REPORT_STORY_CATEGORY_ID');
+
 // The settings each route cannot work without (the session tokens are checked
-// per language in /api/create-feed).
+// per language in /api/create-feed, and the story's key and token in
+// /api/report/story).
 const REQUIRED = {
   GENERATE_API,
   CREATE_FEED_API,
   FEED_CATEGORY_ID,
   REPORT_RANGE_API,
+  REPORT_STORY_API,
 };
 
 // Answers 500 naming the setting when it is empty, and returns false; the
@@ -131,9 +143,10 @@ router.use(express.static(path.join(__dirname, 'public')));
 
 // Every proxy here is the same dumb pipe: forward req.body verbatim, mirror the
 // upstream status code and Content-Type back to the browser. It exists only to
-// dodge CORS, so it never validates or reshapes the field schema.
-function proxyJson(targetUrl, req, res) {
-  return forward(targetUrl, res, 'application/json', JSON.stringify(req.body));
+// dodge CORS, so it never validates or reshapes the field schema. `headers` is
+// for a route whose upstream wants a key in a header (Make a Story's S-id).
+function proxyJson(targetUrl, req, res, headers) {
+  return forward(targetUrl, res, 'application/json', JSON.stringify(req.body), 'POST', headers);
 }
 
 // Same pipe for a plain GET. The browser's query string (?from_date=…) is
@@ -145,9 +158,9 @@ function proxyGet(targetUrl, req, res) {
   return forward(targetUrl + query, res, null, undefined, 'GET');
 }
 
-async function forward(targetUrl, res, contentType, body, method = 'POST') {
+async function forward(targetUrl, res, contentType, body, method = 'POST', extraHeaders) {
   try {
-    const headers = { accept: 'application/json' };
+    const headers = { accept: 'application/json', ...extraHeaders };
     if (contentType) headers['Content-Type'] = contentType;
     const upstream = await fetch(targetUrl, { method, headers, body });
 
@@ -216,6 +229,36 @@ router.get('/api/report/range', (req, res) => {
   return proxyGet(REPORT_RANGE_API, req, res);
 });
 
+// Proxy endpoint — Make a Story: the report page builds a createFeedV2 body
+// from the report ({language, sessionId: "", state, news: [story]}) and this
+// route sends it to REPORT_STORY_API. As in /api/create-feed, the credentials
+// are added here, so none of them is ever in the page: the session token goes
+// into the body's top-level sessionId, the category (if one is set) into each
+// story, and the S-id key into a header.
+router.post('/api/report/story', (req, res) => {
+  if (!needSetting(res, 'REPORT_STORY_API', REPORT_STORY_API)) return;
+  if (!needSetting(res, 'REPORT_STORY_SID', REPORT_STORY_SID)) return;
+  if (!needSetting(res, 'REPORT_STORY_SESSION_ID', REPORT_STORY_SESSION_ID)) return;
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+
+  // Logged as the browser sent it, before the token goes in; the key and the
+  // token appear only masked, on their own lines.
+  console.log('📰 Make a Story — sending request with config:');
+  console.log('👉 URL:', REPORT_STORY_API);
+  console.log('👉 S-id:', maskToken(REPORT_STORY_SID));
+  console.log('👉 SessionId:', maskToken(REPORT_STORY_SESSION_ID));
+  console.log('👉 CategoryId:', REPORT_STORY_CATEGORY_ID || '(blank)');
+  console.log('👉 Payload:', JSON.stringify(body, null, 2));
+
+  const news = Array.isArray(body.news)
+    ? body.news.map((story) =>
+        REPORT_STORY_CATEGORY_ID ? { ...story, categoryId: REPORT_STORY_CATEGORY_ID } : story
+      )
+    : body.news;
+  req.body = { ...body, sessionId: REPORT_STORY_SESSION_ID, news };
+  return proxyJson(REPORT_STORY_API, req, res, { 'S-id': REPORT_STORY_SID });
+});
+
 // Proxy endpoint — the first and last dates the research database has, shown
 // under the report page's date pickers.
 router.get('/api/report/dates', (req, res) => {
@@ -243,6 +286,7 @@ app.listen(PORT, () => {
   console.log(`Proxying /api/create-feed → ${shown(CREATE_FEED_API)}`);
   console.log(`Proxying /api/report/range → ${shown(REPORT_RANGE_API)}`);
   console.log(`Proxying /api/report/dates → ${shown(REPORT_DATES_API)}`);
+  console.log(`Proxying /api/report/story → ${shown(REPORT_STORY_API)}`);
   console.log(`Feed category ID          → ${shown(FEED_CATEGORY_ID)}`);
   const missing = Object.keys(REQUIRED).filter((name) => !REQUIRED[name]);
   if (missing.length) {
@@ -257,4 +301,10 @@ app.listen(PORT, () => {
       ? `Session IDs loaded for: ${withToken.join(', ')}`
       : 'Session IDs: none set — Create Feed will fail until SESSION_ID_EN / SESSION_ID_HI / SESSION_ID_BN exist'
   );
+  const storyMissing = Object.entries({ REPORT_STORY_SID, REPORT_STORY_SESSION_ID })
+    .filter(([, value]) => !value)
+    .map(([name]) => name);
+  if (storyMissing.length) {
+    console.log(`Make a Story: ${storyMissing.join(' and ')} not set — the button will fail until it is added`);
+  }
 });

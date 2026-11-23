@@ -16,6 +16,9 @@ const reportError = document.getElementById('report-error');
 const reportLayout = document.getElementById('report-layout');
 const topicNav = document.getElementById('topic-nav');
 const report = document.getElementById('report');
+const storyBox = document.getElementById('story-box');
+const storyBtn = document.getElementById('story-btn');
+const storyResult = document.getElementById('story-result');
 
 // The backend refuses a longer range, so the page checks first.
 const MAX_RANGE_DAYS = 366;
@@ -24,6 +27,11 @@ const MAX_RANGE_DAYS = 366;
 // {data_from, data_to, fact_checks, default_from, default_to}. null until it
 // has loaded, or when it could not be loaded.
 let dataSpan = null;
+
+// The reply behind the report on the page — what Make a Story turns into a
+// story. Set only by renderReport(), so it always matches what is shown: a
+// failed Generate leaves the old report, and the old story, in place.
+let currentReport = null;
 
 // ---------- utilities ----------
 function setLoading(loading) {
@@ -472,9 +480,323 @@ function renderReport(data) {
   // Every topic in the range, each opening its own report in a new tab.
   showTopicSidebar(topicNav, reportLayout, data, { newTab: true });
 
+  // A new report, so a new story: the line left by the last one goes.
+  currentReport = data;
+  storyResult.hidden = true;
+  storyBox.hidden = false;
+
   report.hidden = false;
   reportLayout.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
+/* ==========================================================================
+   Make a Story — turns the report on the page into a createFeedV2 story and
+   POSTs it through api/report/story, which adds the S-id key and the session
+   token from the server's settings. Nothing here asks for a new report: the
+   story is built from the reply that is already on the page.
+   ========================================================================== */
+
+// Fixed values the CMS needs that the report has no data for. These are the
+// best guesses to confirm with the CMS — the sample payload was a fact-check,
+// and a report has no claim, verdict or interview.
+const STORY_TEXT = {
+  // The sample's values, kept because they are the only ones known to be
+  // accepted; ask the CMS team if a report should have another classification.
+  articleType: 'NEWS_ARTICLE',
+  classification: 'FACT_CHECK',
+  reviewType: 'FULL',
+  // The label on the story, where a fact-check says "Fact Check".
+  newsLabel: 'Report',
+  highlightsHeading: 'Key highlights',
+  highlightName: 'Top story',
+  location: 'Mumbai',
+  reportedFrom: 'BOOM Live',
+  langLabel1: 'Read in English',
+  langLabel2: 'Hindi version',
+  readUnit: 'min read',
+};
+
+// The story goes to the CMS as HTML, so every piece of text is escaped first:
+// nothing in the data can turn into a tag.
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// A link only for a real web address (like link() on the page); otherwise
+// just the text.
+function htmlLink(url, text) {
+  const href = String(url || '').trim();
+  return /^https?:\/\//i.test(href)
+    ? `<a href="${escapeHtml(href)}">${escapeHtml(text)}</a>`
+    : escapeHtml(text);
+}
+
+// Text that may be one string or a list of paragraphs, as a clean list.
+const textList = (value) =>
+  [].concat(value ?? []).map((s) => String(s ?? '').trim()).filter(Boolean);
+
+// Trim, drop blanks and repeats, keep the order.
+function cleanList(...lists) {
+  const seen = new Set();
+  return lists.flat().map((v) => String(v ?? '').trim()).filter((v) => v && !seen.has(v) && seen.add(v));
+}
+
+// ~200 words a minute, in whole minutes, at least one.
+function readingTimeSeconds(text) {
+  const words = String(text || '').trim().split(/\s+/).filter(Boolean).length;
+  return Math.max(60, Math.round(words / 200) * 60);
+}
+
+function truncate(str, max) {
+  const s = String(str || '');
+  return s.length > max ? s.slice(0, max).trimEnd() + '...' : s;
+}
+
+const fcWord = (n) => `${n} fact-check${n === 1 ? '' : 's'}`;
+
+// The story's body, in the order of the report on the page. Charts cannot go
+// into a story, so each section is its text plus, where the report has a
+// chart, the same numbers as a list. The appendix (every fact-check) is left
+// out — the theme lists below already link to the biggest stories — and so
+// are the data notes (see the end).
+function storyHtml(data, label) {
+  const n = data.narrative || {};
+  const out = [];
+  const heading = (text) => out.push(`<h4>${escapeHtml(text)}</h4>`);
+  const paras = (value) => textList(value).forEach((p) => out.push(`<p>${escapeHtml(p)}</p>`));
+  // `items` are HTML already (escaped, maybe with a link).
+  const list = (items) => items.length && out.push(`<ul>\n${items.map((i) => `<li>${i}</li>`).join('\n')}\n</ul>`);
+
+  paras(n.standfirst);
+
+  const highlights = textList(n.key_highlights);
+  if (highlights.length) {
+    heading(STORY_TEXT.highlightsHeading);
+    list(highlights.map(escapeHtml));
+  }
+
+  if (textList(n.overview).length) {
+    heading('Overview');
+    paras(n.overview);
+  }
+
+  const topics = (data.topics || []).filter((t) => t.topic && t.topic !== 'Uncoded').slice(0, 10);
+  if (topics.length) {
+    heading('What was fact-checked');
+    paras(`The most fact-checked topics, ${label}:`);
+    list(topics.map((t) => escapeHtml(`${t.topic}: ${fcWord(t.count)}`)));
+  }
+
+  const targets = (data.targets || []).slice(0, 10);
+  if (targets.length) {
+    heading('Who was targeted');
+    list(targets.map((t) => escapeHtml(`${t.label}: ${fcWord(t.count)}`)));
+  }
+
+  if (data.ai && textList(n.ai_paragraph).length) {
+    heading(`AI: ${fcWord(data.ai.count)} (${pct(data.ai.percent)})`);
+    paras(n.ai_paragraph);
+  }
+
+  if (textList(n.media_paragraph).length) {
+    heading('News media in the frame');
+    paras(n.media_paragraph);
+  }
+
+  const themes = data.themes || [];
+  if (themes.length) {
+    heading('Theme assessment');
+    themes.forEach((t) => {
+      out.push(`<p><strong>${escapeHtml(t.topic)}</strong></p>`);
+      paras(t.summary);
+      list((t.fact_checks || []).map((fc) => `${escapeHtml(shortDate(fc.date))}: ${htmlLink(fc.url, fc.headline)}`));
+    });
+  }
+
+  // The data notes stay on the page only: they are for editors ("Topic 2 is
+  // not used", "the field looks unfilled"), not for readers of the story.
+  return out.join('\n');
+}
+
+// The createFeedV2 body, shaped like the sample: {language, sessionId, state,
+// news: [story]}. sessionId (and categoryId) leave the page blank on purpose —
+// api/report/story fills them in from the server's settings. Every key of the
+// sample is always sent, even when it is blank.
+function buildStoryPayload(data) {
+  const meta = data.meta || {};
+  const n = data.narrative || {};
+  const label = meta.label || `${meta.from_date} – ${meta.to_date}`;
+  const t = STORY_TEXT;
+
+  const heading = String(n.headline || `BOOM Research Report: ${label}`).trim();
+  const standfirst = textList(n.standfirst).join(' ');
+  const story = storyHtml(data, label);
+  // Counted on the text only, without the tags.
+  const readSec = readingTimeSeconds(story.replace(/<[^>]+>/g, ' '));
+  const topTopics = (data.topics || [])
+    .filter((x) => x.topic && x.topic !== 'Uncoded')
+    .slice(0, 5)
+    .map((x) => x.topic);
+  const reportKind = meta.whole_month ? 'Monthly Report' : 'Report';
+  const caption = `BOOM misinformation report, ${label}`;
+
+  const news = {
+    ReviewBoxcheckbox_2: true,
+    ReviewBoximage_advanced_5: '',
+    articletype: t.articleType,
+    avatarId: 1,
+    categoryId: '',
+    // A report has no single claim or verdict, so the claim fields are blank
+    // and the claim-review and fast-check boxes are switched off below.
+    claim_fact_check: '',
+    claim_rating: 0,
+    claim_review: '',
+    claim_source: '',
+    claimed_by: '',
+    classification: t.classification,
+    description: standfirst,
+    fact_check_summary: '',
+    fact_check_summary_claim: '',
+    fast_check_claim: '',
+    fast_check_previous_url: '',
+    fast_check_review_type: t.reviewType,
+    fast_check_your_fact: '',
+    fastcheck_media: [],
+    guest_name: '',
+    heading,
+    highlightLinkPost: '',
+    highlightNamePost: t.highlightName,
+    highlight_icon: 'flag',
+    highlights: textList(n.key_highlights),
+    highlights_heading: t.highlightsHeading,
+    // Lists, as in the sample for this API (the main page's Create Feed sends
+    // these two as comma-separated text instead, for its own endpoint).
+    keywords: cleanList(
+      `BOOM ${reportKind.toLowerCase()}`,
+      `misinformation ${label}`,
+      `fact-checks ${label}`,
+      topTopics,
+      data.ai && data.ai.count ? 'AI misinformation' : []
+    ),
+    tags: cleanList('Misinformation', reportKind, topTopics),
+    // No interview in a report.
+    interview_ans: [],
+    interview_check: false,
+    interview_ques: [],
+    interviewer_name: '',
+    language: 'en',
+    location: t.location,
+    mediaIds: [],
+    news_label: t.newsLabel,
+    news_label_url: '',
+    news_read_time_sec: readSec,
+    news_speech_file_path: '',
+    // A new story has not been read yet.
+    news_trending_view_count: 0,
+    news_type: 'USER',
+    point_lat: 13.0368,
+    point_long: 80.2676,
+    rating_explanation: '',
+    read_duration: `${Math.round(readSec / 60)} ${t.readUnit}`,
+    reviewed_by: 'BOOM',
+    seo_description: truncate(standfirst, 160),
+    sessionId: '',
+    show_claim_review: false,
+    show_fast_check: false,
+    state: 'SUBMITTED',
+    story,
+    story_language_label_1: t.langLabel1,
+    story_language_label_2: t.langLabel2,
+    story_language_link_1: '',
+    story_language_link_2: '',
+    story_reported_from: t.reportedFrom,
+    'test-cap': caption,
+    'test-lang': 'en',
+    text_caption: caption,
+    // No video in a report.
+    video_duration: '',
+  };
+
+  return { language: 'en', sessionId: '', state: 'SUBMITTED', news: [news] };
+}
+
+function setStoryLoading(loading) {
+  storyBtn.disabled = loading;
+  storyBtn.classList.toggle('loading', loading);
+  // Keep the emoji — this overwrites the label set in report.html.
+  storyBtn.querySelector('.btn-label').textContent = loading ? '⏳ Making the story…' : '📝 Make a Story';
+}
+
+function showStoryResult(text, isError) {
+  storyResult.hidden = false;
+  storyResult.textContent = text;
+  storyResult.classList.toggle('error', Boolean(isError));
+}
+
+// The new story's id, as the main page's Create Feed reads it: {feedId: 4916}
+// so far, a few other spellings accepted, and one {data: {...}} unwrapped.
+function extractFeedId(data) {
+  if (!data || typeof data !== 'object') return '';
+  const id = data.feedId ?? data.feed_id ?? data.id;
+  if (id != null && id !== '') return String(id);
+  if (data.data && typeof data.data === 'object') return extractFeedId(data.data);
+  return '';
+}
+
+storyBtn.addEventListener('click', async () => {
+  if (!currentReport) {
+    showToast('Generate a report first.', true);
+    return;
+  }
+  const payload = buildStoryPayload(currentReport);
+
+  // Printed to the browser console (F12 → Console) so it is clear what left the
+  // page. sessionId and categoryId are blank here on purpose — the server adds
+  // them, and the S-id key — and the terminal running the server prints those.
+  console.log('📰 Make a Story — sending request with config:');
+  console.log('👉 URL:', new URL('api/report/story', location.href).href);
+  console.log('👉 S-id / SessionId / CategoryId:', '(added by the server, from .env)');
+  console.log('👉 Payload:', JSON.stringify(payload, null, 2));
+
+  setStoryLoading(true);
+  try {
+    // Relative on purpose — see README "Two addresses".
+    const res = await fetch('api/report/story', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', accept: 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const text = await res.text();
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = null;
+    }
+    if (!res.ok) {
+      throw new Error(data ? extractErrorMessage(data, res.status) : text.slice(0, 300));
+    }
+    console.log('✅ Story created. Reply from the CMS:', data ?? text);
+
+    // One short line; the raw reply only when it has no id, so a surprise
+    // answer is never hidden.
+    const id = extractFeedId(data);
+    const done = '✅ Story created successfully!';
+    showStoryResult(id ? `${done} (ID: ${id})` : `${done}\n${text}`.trim(), false);
+    showToast(done);
+  } catch (err) {
+    console.error(err);
+    showStoryResult(err.message || 'Request failed', true);
+    showToast(err.message || 'Make a Story failed', true);
+  } finally {
+    setStoryLoading(false);
+  }
+});
 
 // ---------- form submit ----------
 // The only thing that ever asks for a report: every report is an AI call.
