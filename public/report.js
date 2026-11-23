@@ -491,9 +491,9 @@ function renderReport(data) {
 
 /* ==========================================================================
    Make a Story — turns the report on the page into a createFeedV2 story and
-   POSTs it through api/report/story, which adds the S-id key and the session
-   token from the server's settings. Nothing here asks for a new report: the
-   story is built from the reply that is already on the page.
+   POSTs it through api/report/story, which adds the S-id key from the
+   server's settings (no sessionId is sent). Nothing here asks for a new
+   report: the story is the report that is already on the page.
    ========================================================================== */
 
 // Fixed values the CMS needs that the report has no data for. These are the
@@ -557,76 +557,173 @@ function truncate(str, max) {
   return s.length > max ? s.slice(0, max).trimEnd() + '...' : s;
 }
 
-const fcWord = (n) => `${n} fact-check${n === 1 ? '' : 's'}`;
+// ---------- the whole report, as story HTML ----------
+// The story is the report exactly as it is drawn on the page: every section,
+// every chart, the theme assessment, the data notes, the appendix and the
+// footnote, in the same order. It is read from the #report article itself
+// (not rebuilt from the reply), so anything the page shows ends up in the
+// story too. The CMS only gets plain tags — <h4>, <p>, <ul>/<li>, <strong>,
+// <em> and <a> — like the sample's story, so:
+//   • section titles become <h4>; chart and theme titles <p><strong>;
+//   • a chart becomes the list of its numbers ("Hindi: 48.8% (59)");
+//   • a table becomes a list, its cells joined with " · ";
+//   • the headline is left out (it is the story's `heading`), and so are the
+//     timeline's axis labels, which mean nothing without the chart.
+// Every piece of text is escaped, so nothing can turn into a tag.
 
-// The story's body, in the order of the report on the page. Charts cannot go
-// into a story, so each section is its text plus, where the report has a
-// chart, the same numbers as a list. The appendix (every fact-check) is left
-// out — the theme lists below already link to the biggest stories — and so
-// are the data notes (see the end).
-function storyHtml(data, label) {
-  const n = data.narrative || {};
-  const out = [];
-  const heading = (text) => out.push(`<h4>${escapeHtml(text)}</h4>`);
-  const paras = (value) => textList(value).forEach((p) => out.push(`<p>${escapeHtml(p)}</p>`));
-  // `items` are HTML already (escaped, maybe with a link).
-  const list = (items) => items.length && out.push(`<ul>\n${items.map((i) => `<li>${i}</li>`).join('\n')}\n</ul>`);
+const squash = (s) => String(s || '').replace(/\s+/g, ' ').trim();
 
-  paras(n.standfirst);
+// The text of one AI / Media / Old chip group: "AI, Old".
+const chipsText = (node) =>
+  [...node.querySelectorAll('.rp-chip')].map((c) => squash(c.textContent)).filter(Boolean).join(', ');
 
-  const highlights = textList(n.key_highlights);
-  if (highlights.length) {
-    heading(STORY_TEXT.highlightsHeading);
-    list(highlights.map(escapeHtml));
-  }
-
-  if (textList(n.overview).length) {
-    heading('Overview');
-    paras(n.overview);
-  }
-
-  const topics = (data.topics || []).filter((t) => t.topic && t.topic !== 'Uncoded').slice(0, 10);
-  if (topics.length) {
-    heading('What was fact-checked');
-    paras(`The most fact-checked topics, ${label}:`);
-    list(topics.map((t) => escapeHtml(`${t.topic}: ${fcWord(t.count)}`)));
-  }
-
-  const targets = (data.targets || []).slice(0, 10);
-  if (targets.length) {
-    heading('Who was targeted');
-    list(targets.map((t) => escapeHtml(`${t.label}: ${fcWord(t.count)}`)));
-  }
-
-  if (data.ai && textList(n.ai_paragraph).length) {
-    heading(`AI: ${fcWord(data.ai.count)} (${pct(data.ai.percent)})`);
-    paras(n.ai_paragraph);
-  }
-
-  if (textList(n.media_paragraph).length) {
-    heading('News media in the frame');
-    paras(n.media_paragraph);
-  }
-
-  const themes = data.themes || [];
-  if (themes.length) {
-    heading('Theme assessment');
-    themes.forEach((t) => {
-      out.push(`<p><strong>${escapeHtml(t.topic)}</strong></p>`);
-      paras(t.summary);
-      list((t.fact_checks || []).map((fc) => `${escapeHtml(shortDate(fc.date))}: ${htmlLink(fc.url, fc.headline)}`));
-    });
-  }
-
-  // The data notes stay on the page only: they are for editors ("Topic 2 is
-  // not used", "the field looks unfilled"), not for readers of the story.
-  return out.join('\n');
+// The inside of a paragraph, list item or table cell: text, links and bold.
+// A language chip after a headline reads "(Hindi)"; a flags group "(AI, Old)".
+function inlineHtml(node) {
+  let out = '';
+  node.childNodes.forEach((child) => {
+    if (child.nodeType === Node.TEXT_NODE) {
+      out += escapeHtml(child.textContent);
+    } else if (child.nodeType === Node.ELEMENT_NODE) {
+      if (child.matches('a')) out += htmlLink(child.getAttribute('href'), squash(child.textContent));
+      else if (child.matches('b, strong')) out += `<strong>${inlineHtml(child)}</strong>`;
+      else if (child.matches('.rp-flags')) out += chipsText(child) ? ` (${chipsText(child)})` : '';
+      else if (child.matches('.rp-chip')) out += ` (${escapeHtml(squash(child.textContent))})`;
+      else out += inlineHtml(child);
+    }
+  });
+  return out.replace(/\s+/g, ' ').replace(/\(\s+/g, '(').replace(/\s+\)/g, ')').trim();
 }
 
-// The createFeedV2 body, shaped like the sample: {language, sessionId, state,
-// news: [story]}. sessionId (and categoryId) leave the page blank on purpose —
-// api/report/story fills them in from the server's settings. Every key of the
-// sample is always sent, even when it is blank.
+// The same for one element itself (inlineHtml only reads what is inside it).
+function ownHtml(node) {
+  const holder = document.createElement('span');
+  holder.append(node.cloneNode(true));
+  return inlineHtml(holder);
+}
+
+// A piece that is nothing but chips — "(AI, Old)" — stands on its own in a
+// list item or table cell, so it loses the brackets: "AI, Old".
+const unwrap = (html) => html.replace(/^\(([^()]*)\)$/, '$1');
+
+// One <ul>, skipping empty items. `items` are HTML already.
+function ulHtml(items) {
+  const list = items.filter(Boolean);
+  return list.length ? `<ul>\n${list.map((i) => `<li>${i}</li>`).join('\n')}\n</ul>` : '';
+}
+
+// "Hindi 48.8% (59)" (a chart legend) → "Hindi: 48.8% (59)".
+function legendText(item) {
+  const text = squash(item.textContent);
+  const m = text.match(/^(.*?) (\d[\d.,]*%) \((\d+)\)$/);
+  return escapeHtml(m ? `${m[1]}: ${m[2]} (${m[3]})` : text);
+}
+
+// One row of the dot timeline: "Iran unrest (12 fact-checks): 09 Jan, 13 Jan (3), …".
+function timelineRowText(row) {
+  const name = squash(row.querySelector('.rp-tl-label span')?.textContent);
+  const count = squash(row.querySelector('.rp-tl-label small')?.textContent);
+  const dots = [...row.querySelectorAll('.rp-dot')].sort(
+    (a, b) => parseFloat(a.style.left) - parseFloat(b.style.left)
+  );
+  const perDate = new Map();
+  dots.forEach((dot) => {
+    const date = dot.title.split(' · ')[0];
+    perDate.set(date, (perDate.get(date) || 0) + 1);
+  });
+  const dates = [...perDate].map(([date, k]) => (k > 1 ? `${date} (${k})` : date)).join(', ');
+  return escapeHtml(`${name}${count ? ` (${count})` : ''}${dates ? `: ${dates}` : ''}`);
+}
+
+// Walks the report's elements in order and writes each one as story HTML.
+function blocksHtml(node, out) {
+  for (const child of node.children) {
+    if (child.matches('h1, .rp-axis-title, .rp-axis, .rp-tl-axis')) continue;
+
+    if (child.matches('.rp-masthead')) {
+      out.push(`<p>${escapeHtml([...child.children].map((c) => squash(c.textContent)).join(' · '))}</p>`);
+    } else if (child.matches('h2, .rp-notes > h3')) {
+      out.push(`<h4>${escapeHtml(squash(child.textContent))}</h4>`);
+    } else if (child.matches('h3, h4, h5, h6')) {
+      out.push(`<p><strong>${escapeHtml(squash(child.textContent))}</strong></p>`);
+    } else if (child.matches('.rp-sub, .rp-note')) {
+      const html = inlineHtml(child);
+      if (html) out.push(`<p><em>${html}</em></p>`);
+    } else if (child.matches('p')) {
+      const html = inlineHtml(child);
+      if (html) out.push(`<p>${html}</p>`);
+    } else if (child.matches('.rp-stats')) {
+      // The four stat cards: "Fact-checks published: 121 — +36% vs December (89)".
+      out.push(
+        ulHtml(
+          [...child.querySelectorAll('.rp-stat')].map((stat) => {
+            const label = squash(stat.querySelector('.rp-stat-label')?.textContent);
+            const value = squash(stat.querySelector('.rp-stat-value')?.textContent);
+            const sub = squash(stat.querySelector('.rp-stat-sub')?.textContent);
+            return `<strong>${escapeHtml(label)}:</strong> ${escapeHtml(value)}${sub ? ` — ${escapeHtml(sub)}` : ''}`;
+          })
+        )
+      );
+    } else if (child.matches('.rp-bars')) {
+      out.push(
+        ulHtml(
+          [...child.querySelectorAll('.rp-bar-row')].map((row) =>
+            escapeHtml(
+              `${squash(row.querySelector('.rp-bar-label')?.textContent)}: ${squash(row.querySelector('.rp-bar-value')?.textContent)}`
+            )
+          )
+        )
+      );
+    } else if (child.matches('.rp-stack-wrap')) {
+      out.push(ulHtml([...child.querySelectorAll('.rp-legend-item')].map(legendText)));
+    } else if (child.matches('.rp-colchart')) {
+      // A monthly column chart: its title, then "January 2026: 121" per month.
+      const title = squash(child.querySelector('h4')?.textContent);
+      if (title) out.push(`<p><strong>${escapeHtml(title)}</strong></p>`);
+      out.push(ulHtml([...child.querySelectorAll('.rp-col')].map((col) => escapeHtml(col.title))));
+    } else if (child.matches('.rp-timeline')) {
+      out.push(ulHtml([...child.querySelectorAll('.rp-tl-row:not(.rp-tl-axis)')].map(timelineRowText)));
+    } else if (child.matches('table')) {
+      out.push(
+        ulHtml(
+          [...child.querySelectorAll('tbody tr')].map((tr) =>
+            [...tr.children].map((td) => unwrap(inlineHtml(td))).filter(Boolean).join(' · ')
+          )
+        )
+      );
+    } else if (child.matches('ul, ol')) {
+      out.push(
+        ulHtml(
+          [...child.children].map((li) =>
+            // A theme's fact-check: date · language · headline · flags.
+            child.matches('.rp-fc-list')
+              ? [...li.children].map((part) => unwrap(ownHtml(part))).filter(Boolean).join(' · ')
+              : inlineHtml(li)
+          )
+        )
+      );
+    } else if (child.children.length) {
+      // section, figure, footer, a box or column wrapper: what is inside it.
+      blocksHtml(child, out);
+    } else {
+      // Anything else that holds text is kept as a paragraph.
+      const html = inlineHtml(child);
+      if (html) out.push(`<p>${html}</p>`);
+    }
+  }
+  return out;
+}
+
+// The whole report article as one HTML string, one tag per line — the shape
+// of the sample's `story`.
+const reportStoryHtml = () => blocksHtml(report, []).filter(Boolean).join('\n');
+
+// The createFeedV2 body, shaped like the sample — {language, state,
+// news: [story]} — but with no sessionId anywhere: this API is signed in by
+// the S-id header, which api/report/story adds (with the category, if one is
+// set). Every other key of the sample is always sent, even when it is blank.
+// `data` is the reply behind the report on the page; the story's text is read
+// from the page itself (reportStoryHtml), which renderReport() drew from it.
 function buildStoryPayload(data) {
   const meta = data.meta || {};
   const n = data.narrative || {};
@@ -635,7 +732,7 @@ function buildStoryPayload(data) {
 
   const heading = String(n.headline || `BOOM Research Report: ${label}`).trim();
   const standfirst = textList(n.standfirst).join(' ');
-  const story = storyHtml(data, label);
+  const story = reportStoryHtml();
   // Counted on the text only, without the tags.
   const readSec = readingTimeSeconds(story.replace(/<[^>]+>/g, ' '));
   const topTopics = (data.topics || [])
@@ -705,7 +802,8 @@ function buildStoryPayload(data) {
     read_duration: `${Math.round(readSec / 60)} ${t.readUnit}`,
     reviewed_by: 'BOOM',
     seo_description: truncate(standfirst, 160),
-    sessionId: '',
+    // No sessionId key, here or at the top: this API is signed in by the S-id
+    // header alone, which api/report/story adds.
     show_claim_review: false,
     show_fast_check: false,
     state: 'SUBMITTED',
@@ -722,7 +820,7 @@ function buildStoryPayload(data) {
     video_duration: '',
   };
 
-  return { language: 'en', sessionId: '', state: 'SUBMITTED', news: [news] };
+  return { language: 'en', state: 'SUBMITTED', news: [news] };
 }
 
 function setStoryLoading(loading) {
@@ -756,11 +854,11 @@ storyBtn.addEventListener('click', async () => {
   const payload = buildStoryPayload(currentReport);
 
   // Printed to the browser console (F12 → Console) so it is clear what left the
-  // page. sessionId and categoryId are blank here on purpose — the server adds
-  // them, and the S-id key — and the terminal running the server prints those.
+  // page. The S-id key (and the category, if set) is added by the server, and
+  // the terminal running the server prints it, masked.
   console.log('📰 Make a Story — sending request with config:');
   console.log('👉 URL:', new URL('api/report/story', location.href).href);
-  console.log('👉 S-id / SessionId / CategoryId:', '(added by the server, from .env)');
+  console.log('👉 S-id / CategoryId:', '(added by the server, from .env)');
   console.log('👉 Payload:', JSON.stringify(payload, null, 2));
 
   setStoryLoading(true);

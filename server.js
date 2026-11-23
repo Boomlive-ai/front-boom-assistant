@@ -88,17 +88,16 @@ const SESSION_IDS = {
 const FEED_CATEGORY_ID = setting('FEED_CATEGORY_ID');
 
 // The report page's Make a Story button: a second createFeedV2 address, which
-// turns the report into a story in the CMS. It wants its own key in an `S-id`
-// header and its own session token, so both are settings — credentials, like
-// the tokens above, and stamped in by /api/report/story, never sent from the
-// page. The category is optional: blank sends "" (as the sample payload does).
+// turns the report into a story in the CMS. It is signed in by one key, sent
+// in the `S-id` header — a credential like the tokens above, so it is added by
+// /api/report/story and never sent from the page. No sessionId is sent to it
+// at all. The category is optional: blank sends "" (as the sample payload does).
 const REPORT_STORY_API = setting('REPORT_STORY_API');
 const REPORT_STORY_SID = setting('REPORT_STORY_SID');
-const REPORT_STORY_SESSION_ID = setting('REPORT_STORY_SESSION_ID');
 const REPORT_STORY_CATEGORY_ID = setting('REPORT_STORY_CATEGORY_ID');
 
 // The settings each route cannot work without (the session tokens are checked
-// per language in /api/create-feed, and the story's key and token in
+// per language in /api/create-feed, and the story's S-id key in
 // /api/report/story).
 const REQUIRED = {
   GENERATE_API,
@@ -230,32 +229,29 @@ router.get('/api/report/range', (req, res) => {
 });
 
 // Proxy endpoint — Make a Story: the report page builds a createFeedV2 body
-// from the report ({language, sessionId: "", state, news: [story]}) and this
-// route sends it to REPORT_STORY_API. As in /api/create-feed, the credentials
-// are added here, so none of them is ever in the page: the session token goes
-// into the body's top-level sessionId, the category (if one is set) into each
-// story, and the S-id key into a header.
+// from the report ({language, state, news: [story]}, with no sessionId) and
+// this route sends it to REPORT_STORY_API. As in /api/create-feed, the
+// credential is added here, so it is never in the page: the S-id key goes into
+// a header, and the category (if one is set) into each story.
 router.post('/api/report/story', (req, res) => {
   if (!needSetting(res, 'REPORT_STORY_API', REPORT_STORY_API)) return;
   if (!needSetting(res, 'REPORT_STORY_SID', REPORT_STORY_SID)) return;
-  if (!needSetting(res, 'REPORT_STORY_SESSION_ID', REPORT_STORY_SESSION_ID)) return;
   const body = req.body && typeof req.body === 'object' ? req.body : {};
 
-  // Logged as the browser sent it, before the token goes in; the key and the
-  // token appear only masked, on their own lines.
+  // The payload is logged as the browser sent it; the key appears only masked,
+  // on its own line.
   console.log('📰 Make a Story — sending request with config:');
   console.log('👉 URL:', REPORT_STORY_API);
   console.log('👉 S-id:', maskToken(REPORT_STORY_SID));
-  console.log('👉 SessionId:', maskToken(REPORT_STORY_SESSION_ID));
   console.log('👉 CategoryId:', REPORT_STORY_CATEGORY_ID || '(blank)');
   console.log('👉 Payload:', JSON.stringify(body, null, 2));
 
-  const news = Array.isArray(body.news)
-    ? body.news.map((story) =>
-        REPORT_STORY_CATEGORY_ID ? { ...story, categoryId: REPORT_STORY_CATEGORY_ID } : story
-      )
-    : body.news;
-  req.body = { ...body, sessionId: REPORT_STORY_SESSION_ID, news };
+  if (REPORT_STORY_CATEGORY_ID && Array.isArray(body.news)) {
+    req.body = {
+      ...body,
+      news: body.news.map((story) => ({ ...story, categoryId: REPORT_STORY_CATEGORY_ID })),
+    };
+  }
   return proxyJson(REPORT_STORY_API, req, res, { 'S-id': REPORT_STORY_SID });
 });
 
@@ -301,10 +297,7 @@ app.listen(PORT, () => {
       ? `Session IDs loaded for: ${withToken.join(', ')}`
       : 'Session IDs: none set — Create Feed will fail until SESSION_ID_EN / SESSION_ID_HI / SESSION_ID_BN exist'
   );
-  const storyMissing = Object.entries({ REPORT_STORY_SID, REPORT_STORY_SESSION_ID })
-    .filter(([, value]) => !value)
-    .map(([name]) => name);
-  if (storyMissing.length) {
-    console.log(`Make a Story: ${storyMissing.join(' and ')} not set — the button will fail until it is added`);
+  if (!REPORT_STORY_SID) {
+    console.log('Make a Story: REPORT_STORY_SID not set — the button will fail until it is added');
   }
 });
