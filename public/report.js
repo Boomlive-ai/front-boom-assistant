@@ -124,7 +124,7 @@ function updateDatesNote() {
       true
     );
   } else {
-    setNote(datesNote, `Data in the database: ${span} (${dataSpan.fact_checks} fact-checks).`);
+    // setNote(datesNote, `Data in the database: ${span} (${dataSpan.fact_checks} fact-checks).`);
   }
 }
 
