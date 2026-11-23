@@ -121,7 +121,7 @@ function updateDatesNote() {
     setNote(
       datesNote,
       // [`No fact-checks in these dates: the database has ${span}. `, latestMonthButton()],
-      true
+      // true
     );
   } else {
     // setNote(datesNote, `Data in the database: ${span} (${dataSpan.fact_checks} fact-checks).`);
